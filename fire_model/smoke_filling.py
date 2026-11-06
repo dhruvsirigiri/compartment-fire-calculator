@@ -63,6 +63,21 @@ def plume_mass_flow(hrr, z):
     return 0.071 * q_convective ** (1 / 3) * z ** (5 / 3) + 0.0018 * q_convective
 
 
+def flame_height(hrr, diameter):
+    """Mean flame height (m) from Heskestad's correlation:
+
+        L = 0.235 Q^(2/5) - 1.02 D        Q in kW, D = fire diameter (m)
+
+    (as used in NUREG-1805 Chapter 3). For a small fire spread over a wide area
+    the formula can go negative; the flames are then very short, so 0 is returned.
+    Heskestad's plume entrainment equation (plume_mass_flow) is meant for
+    heights above this flame tip.
+    """
+    if hrr <= 0:
+        return 0.0
+    return max(0.0, 0.235 * hrr ** (2 / 5) - 1.02 * diameter)
+
+
 def door_outflow(room, z, layer_temp_k):
     """Mass flow of smoke (kg/s) out through the top of the door.
 

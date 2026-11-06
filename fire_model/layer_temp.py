@@ -87,6 +87,13 @@ def wall_heat_transfer_coefficient(t, lining):
     return lining.k / lining.thickness
 
 
+def mqh_temperature_rise(hrr, room, h_k):
+    """Temperature rise of the hot layer above ambient, dT_g (K), from the MQH
+    correlation for a fire of `hrr` kW and a wall coefficient h_k (kW/m^2.K)."""
+    heat_loss_term = opening_factor(room) * h_k * interior_surface_area(room)
+    return MQH_CONSTANT * (hrr**2 / heat_loss_term) ** (1 / 3)
+
+
 def mqh_layer_temperature(t, hrr, room, lining):
     """Average hot gas layer temperature (°C) at time t (s) for a fire of
     `hrr` kW, using the MQH correlation."""
@@ -96,9 +103,7 @@ def mqh_layer_temperature(t, hrr, room, lining):
         return T_AMBIENT
 
     h_k = wall_heat_transfer_coefficient(t, lining)
-    heat_loss_term = opening_factor(room) * h_k * interior_surface_area(room)
-    temperature_rise = MQH_CONSTANT * (hrr**2 / heat_loss_term) ** (1 / 3)
-    return T_AMBIENT + temperature_rise
+    return T_AMBIENT + mqh_temperature_rise(hrr, room, h_k)
 
 
 def temperature_history(hrr_by_second, room, lining):

@@ -28,6 +28,8 @@ The fire used everywhere in the model is therefore
     Q_eff(t) = min(alpha t^2, Q_max, Q_vent)
 """
 
+import math
+
 from fire_model.growth import t_squared_hrr
 from fire_model.layer_temp import T_AMBIENT
 from fire_model.room import interior_surface_area, opening_factor
@@ -64,6 +66,19 @@ def thomas_flashover_hrr(room):
     """Minimum fire for flashover (kW), Thomas (1981). The first term accounts
     for heat lost to the room's surfaces, the second for heat lost out the door."""
     return 7.8 * interior_surface_area(room) + 378.0 * opening_factor(room)
+
+
+def mqh_flashover_hrr(room, h_k):
+    """Minimum fire for flashover (kW) from the closed-form MQH equation:
+
+        Q_FO = 610 * (h_k * A_T * A_o*sqrt(H_o))^(1/2)
+
+    h_k is the wall heat transfer coefficient (kW/m^2.K). NUREG-1805 Chapter 13
+    uses h_k = k/delta, assuming the walls are heated through (t > t_p).
+    The model itself uses the equivalent temperature criterion instead (see
+    mqh_flashover_time); this form is kept for comparison and validation.
+    """
+    return 610.0 * math.sqrt(h_k * interior_surface_area(room) * opening_factor(room))
 
 
 def time_hrr_reaches(hrr_by_second, threshold):
