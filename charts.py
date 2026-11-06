@@ -182,9 +182,10 @@ class ChartKit:
                        xanchor="right" if on_left else "left", yanchor="top", xshift=-3 if on_left else 3)
 
 
-def hrr_chart(kit, result, units, growth_key, peak_hrr, unprotected=None):
-    """Chart 1 (Steps 1 and 3): fire size over time, flashover range, air supply
-    limit, the other growth classes, and (with a sprinkler) the unprotected fire."""
+def hrr_chart(kit, result, units, growth_key, peak_hrr, unprotected=None, show_flashover=True):
+    """Chart 1 (Steps 1 and 3): fire size over time, flashover range (unless
+    show_flashover is False), air supply limit, the other growth classes, and
+    (with a sprinkler) the unprotected fire."""
     c, t_end, times = kit.colors, kit.t_end, kit.times
 
     def show(kw):
@@ -192,7 +193,7 @@ def hrr_chart(kit, result, units, growth_key, peak_hrr, unprotected=None):
         return units.show("hrr", kw)
 
     hrr = units.series("hrr", result.hrr)
-    fo_sizes = [show(m.threshold_hrr) for m in result.flashover if m.threshold_hrr is not None]
+    fo_sizes = [show(m.threshold_hrr) for m in result.flashover if m.threshold_hrr is not None] if show_flashover else []
     q_vent = show(result.ventilation_limit)
     peak = show(peak_hrr)
     y_top = nice_axis_top(max(peak, min(q_vent, peak * 1.6), *fo_sizes) * 1.12)

@@ -15,16 +15,19 @@ import math
 from dataclasses import dataclass, replace
 
 from fire_model.detection import ceiling_jet_temperature_rise, ceiling_jet_velocity
-from fire_model.egress import HEAD_HEIGHT, TENABILITY_TEMP, occupant_status
+from fire_model.egress import HEAD_HEIGHT, OCCUPANT_PRESETS, REASON_SMOKE_LOW, TENABILITY_TEMP, occupant_status
 from fire_model.flashover import babrauskas_flashover_hrr, thomas_flashover_hrr, ventilation_limit
 from fire_model.growth import GROWTH_TIMES, REFERENCE_HRR, burning_diameter, growth_coefficient, time_to_reach
 from fire_model.layer_temp import MQH_UPPER_LIMIT, T_AMBIENT, mqh_layer_temperature, thermal_penetration_time
-from fire_model.room import Room, floor_area, interior_surface_area, opening_factor
+from fire_model.room import Room, floor_area, interior_surface_area, opening_factor, room_problems
 from fire_model.smoke_filling import door_outflow, flame_height, kelvin, plume_mass_flow
 
 # ---------------------------------------------------------------------------
 # Words shown to the user
 # ---------------------------------------------------------------------------
+
+CUSTOM = "Custom"  # what a preset menu shows once one of its numbers has been edited
+NO_SPRINKLER = "None"
 
 # Growth classes: display name and a typical fuel (from the prototype).
 GROWTH_LABELS = {
@@ -64,7 +67,7 @@ INPUT_LABELS = {
 # What each input does, in words that follow the equations of the model.
 WHY = {
     "growth": "The growth rate sets α in Q = αt², how fast the fire grows. A faster fire reaches every "
-              "threshold sooner (smoke at head height, 200 °C, flashover), but not a bigger final size.",
+              "threshold sooner (smoke at head height, painful radiant heat, flashover), but not a bigger final size.",
     "fuel": "What's burning sets the peak heat release rate: the biggest the fire gets. It does not change "
             "the first minutes, while the fire is still small and growing.",
     "peak_hrr": "The peak heat release rate is the biggest the fire gets. A bigger peak can push the fire past "
@@ -148,6 +151,15 @@ def seconds(t):
     return None if t is None else f"{math.floor(t + 0.5):,} s"
 
 
+def untenable_reason(result, units):
+    """Why the room became untenable, in the display units (None if it never did)."""
+    if result.aset_reason is None:
+        return None
+    if result.aset_reason == REASON_SMOKE_LOW:
+        return f"Smoke reaches head height ({units.fmt('length', HEAD_HEIGHT, 1)})"
+    return f"Smoke layer reaches {units.fmt('temperature', TENABILITY_TEMP)}"
+
+
 def _a(word):
     """'a' or 'an' before a word."""
     return "an" if word[:1].lower() in "aeiou" else "a"
@@ -194,6 +206,18 @@ class Change:
     reasons: list  # paragraphs explaining why
     step: str  # the tab that shows the effect best
     toast: str  # one short line
+
+
+def _hrr_range(low, high, units):
+    """A range of fire sizes with one unit, e.g. '1,553–2,054 kW'."""
+    return f"{units.show('hrr', low):,.0f}–{units.show('hrr', high):,.0f} {units.unit('hrr')}"
+
+
+def _hottest(result, units):
+    """The hottest smoke, flagged when MQH is outside the range it was fitted to."""
+    hottest = max(result.layer_temp)
+    beyond = "" if hottest <= MQH_UPPER_LIMIT else " (beyond MQH's range, so only rough)"
+    return f"{units.fmt('temperature', hottest)}{beyond}"
 
 
 def _range_text(r):
@@ -292,11 +316,15 @@ def describe_change(old, new, before, after, units, format_input):
     changed = [k for k in new if old.get(k) != new.get(k)]
     if not changed:
         return None
-    # Inputs filled in by a preset are explained by the preset.
-    hidden = {k for preset, group in PRESET_GROUPS.items() if preset in changed for k in group}
-    main = [k for k in changed if k not in hidden] or changed
+    # A preset menu that switched to "Custom" did so because one of its numbers was
+    # edited: that number is the cause. Inputs a preset filled in are explained by the preset.
+    causes = [k for k in changed if not (k in PRESET_GROUPS and new.get(k) == CUSTOM)]
+    hidden = {k for preset, group in PRESET_GROUPS.items() if preset in causes for k in group}
+    main = [k for k in causes if k not in hidden] or changed
     lines = [f"{INPUT_LABELS.get(k, k)}: {format_input(k, old.get(k))} → {format_input(k, new.get(k))}" for k in changed]
-    headline = lines[changed.index(main[0])] + (f" (and {len(changed) - 1} more)" if len(changed) > 1 else "")
+    # "(and N more)" counts only the other causes, not what a preset filled in or a
+    # menu switching to Custom (those are still listed in `inputs`).
+    headline = lines[changed.index(main[0])] + (f" (and {len(main) - 1} more)" if len(main) > 1 else "")
 
     reasons = []
     for key in main[:3]:
@@ -402,10 +430,10 @@ def explain_flashover(room, result, units):
     reached = [m for m in result.flashover if m.time is not None]
     sizes = [m.threshold_hrr for m in result.flashover if m.threshold_hrr is not None]
     out = [
-        f"**Flashover needs a fire of about {fmt('hrr', min(sizes))}–{fmt('hrr', max(sizes))}**, depending on the method. "
+        f"**Flashover needs a fire of about {_hrr_range(min(sizes), max(sizes), units)}**, depending on the method. "
         f"Babrauskas ({fmt('hrr', bab.threshold_hrr)}) only uses the door's opening factor. Thomas "
         f"({fmt('hrr', tho.threshold_hrr)}) also counts the heat lost to the {fmt('area', result.interior_area, 1)} of "
-        "walls, ceiling and floor. MQH asks when the smoke itself reaches 520 °C"
+        f"walls, ceiling and floor. MQH asks when the smoke itself reaches {fmt('temperature', 520)}"
         + (f" ({fmt('hrr', mqh.threshold_hrr)} here)." if mqh.threshold_hrr is not None else "; in this scenario it never does.")
     ]
     biggest = max(result.hrr)
@@ -445,7 +473,7 @@ def explain_escape(room, occupant, result, units, heat_detector_used):
         out.append(f"It never reaches head height ({fmt('length', HEAD_HEIGHT, 1)}): the bottom of the layer ends at "
                    f"{fmt('length', min(result.layer_height), 2)}.")
     if result.aset is not None:
-        out.append(f"So the room becomes **untenable at {result.aset} s**: {result.aset_reason.lower()}.")
+        out.append(f"So the room becomes **untenable at {result.aset} s**: {untenable_reason(result, units).lower()}.")
     else:
         out.append(f"So the room **stays tenable** for the whole {result.t_end} s.")
     if result.rset is None:
@@ -474,8 +502,8 @@ def explain_protection(room, result, unprotected, sprinkler, heat_detector, occu
     fmt = units.fmt
     out = []
     if sprinkler is None and heat_detector is None:
-        return ["**No sprinkler or heat detector is installed.** Add one in the sidebar, or with the buttons below, "
-                "to see when it activates and what it changes."]
+        return ["**No sprinkler or heat detector is installed.** Add one with the **Try this** buttons or in the "
+                "sidebar, to see when it activates and what it changes."]
     H = room.height
     if sprinkler is not None:
         if result.sprinkler_time is not None:
@@ -542,7 +570,7 @@ def key_moments(result, occupant, heat_detector_used, units):
     add("door", result.time_smoke_at_door_top, "Smoke at door top",
         "The smoke layer reaches the top of the door and starts spilling out.")
     if result.aset is not None:
-        add("untenable", result.aset, "Untenable", f"The room becomes untenable: {result.aset_reason.lower()}.")
+        add("untenable", result.aset, "Untenable", f"The room becomes untenable: {untenable_reason(result, units).lower()}.")
     if result.time_smoke_at_head_height not in (None, result.aset):
         add("head", result.time_smoke_at_head_height, "Smoke at head height",
             f"Smoke reaches head height ({units.fmt('length', HEAD_HEIGHT, 1)}).")
@@ -562,8 +590,13 @@ def key_moments(result, occupant, heat_detector_used, units):
     return sorted(moments.values(), key=lambda m: (m.time, m.key != "start"))
 
 
-def describe_moment(t, result, room, occupant, peak_hrr, fire_diameter, units, sprinkler=None, heat_detector=None):
-    """What is happening at whole second t, as a few short paragraphs."""
+def describe_moment(t, result, room, occupant, peak_hrr, fire_diameter, units, sprinkler=None, heat_detector=None,
+                    base=0.0):
+    """What is happening at whole second t, as a few short paragraphs.
+
+    base: height (m) of the burning surface the 3D view draws the flames from (the
+    top of the furniture). The calculation itself puts the fire at floor level.
+    """
     fmt = units.fmt
     t = max(0, min(int(t), result.t_end))
     q, temp, z = result.hrr[t], result.layer_temp[t], result.layer_height[t]
@@ -572,11 +605,13 @@ def describe_moment(t, result, room, occupant, peak_hrr, fire_diameter, units, s
         out.append(f"**At {t} s** the fire has just started.")
     else:
         flames = flame_height(q, burning_diameter(q, peak_hrr, fire_diameter))
-        reach = (" They reach the ceiling, so in reality they would spread along it." if flames >= room.height
-                 else f" They reach into the smoke layer, where Heskestad's plume equation is outside its range."
-                 if flames >= z and z < room.height - 0.01 else "")
-        out.append(f"**At {t} s** the fire is {fmt('hrr', q)}, with flames about {fmt('length', min(flames, room.height), 1)} "
-                   f"tall.{reach}")
+        text = f"**At {t} s** the fire is {fmt('hrr', q)}, with flames about {fmt('length', flames, 1)} tall."
+        if base + flames >= room.height:
+            text += " They reach the ceiling and spread along it."
+        if flames >= z and z < room.height - 0.01:
+            text += (" In the calculation (fire at floor level) the flames reach into the smoke layer, where "
+                     "Heskestad's plume equation is outside its range.")
+        out.append(text)
     depth = room.height - z
     if depth < 0.01:
         out.append("There is no smoke layer yet.")
@@ -588,7 +623,8 @@ def describe_moment(t, result, room, occupant, peak_hrr, fire_diameter, units, s
         elif temp < 525:
             look = "dark charcoal: very hot smoke"
         else:
-            look = "glowing red: above about 525 °C hot soot starts to glow (the Draper point), as it does near flashover"
+            look = (f"glowing red: above about {fmt('temperature', 525)} hot soot starts to glow (the Draper point), "
+                    "as it does near flashover")
         if z < 0.05:
             out.append(f"The smoke fills the whole room, down to the floor, at {fmt('temperature', temp)}. It is drawn "
                        f"{look}. (The model's layer height jitters near the floor here; read it as smoke-logged.)")
@@ -625,3 +661,149 @@ def describe_moment(t, result, room, occupant, peak_hrr, fire_diameter, units, s
             out.append(f"The {name}'s element is at {fmt('temperature', temps[t])}, heating toward its "
                        f"{fmt('temperature', device.activation_temp)} rating.")
     return out
+
+
+# ---------------------------------------------------------------------------
+# One-click suggestions and short notes for the sidebar
+# ---------------------------------------------------------------------------
+
+def try_this(step, inputs, units):
+    """Suggested changes for a step's "Try this" buttons: [(label, {input: new value})].
+
+    inputs: the current inputs (SI), as given to describe_change. Each suggestion
+    changes one thing, so "What your last change did" can explain its effect.
+    Only suggestions that give a possible room are offered.
+    """
+    room = _room(inputs)
+    out = []
+
+    def door_width_ok(width):
+        return 0.2 <= width <= 10 and not room_problems(replace(room, door_width=width))
+
+    if step == TAB_FIRE:
+        if inputs["growth"] != "slow":
+            out.append(("Make it a slow fire", {"growth": "slow"}))
+        if inputs["growth"] != "ultrafast":
+            out.append(("Make it an ultrafast fire", {"growth": "ultrafast"}))
+        if inputs["fuel"] != "Wastebasket":
+            out.append(("Burn a wastebasket instead", {"fuel": "Wastebasket"}))
+        else:
+            out.append(("Burn a sofa instead", {"fuel": "Sofa"}))
+    elif step == TAB_HEAT:
+        other = "Gypsum board" if inputs["lining"] == "Concrete" else "Concrete"
+        out.append((f"Line the room with {other.lower()}", {"lining": other}))
+        if door_width_ok(2 * room.door_width):
+            out.append(("Make the door twice as wide", {"door_width": 2 * room.door_width}))
+        if inputs["peak_hrr"] / 2 >= 50:
+            out.append(("Halve the peak fire size", {"peak_hrr": inputs["peak_hrr"] / 2}))
+    elif step == TAB_FLASHOVER:
+        if door_width_ok(2 * room.door_width):
+            out.append(("Make the door twice as wide", {"door_width": 2 * room.door_width}))
+        if door_width_ok(room.door_width / 2):
+            out.append(("Make the door half as wide", {"door_width": room.door_width / 2}))
+        if inputs["sprinkler_type"] == NO_SPRINKLER:
+            out.append(("Add a quick-response sprinkler", {"sprinkler_type": "Quick response bulb"}))
+    elif step == TAB_ESCAPE:
+        others = [name for name in OCCUPANT_PRESETS if name != inputs["occupant_preset"]]
+        for name in others[:2]:
+            out.append((f"Occupant: {name[0].lower() + name[1:]}", {"occupant_preset": name}))
+        if room.height + 1 <= 10:
+            out.append((f"Raise the ceiling by {units.fmt('length', 1.0, 1)}", {"height": room.height + 1}))
+    elif step == TAB_PROTECTION:
+        if inputs["sprinkler_type"] == NO_SPRINKLER:
+            out.append(("Add a quick-response sprinkler", {"sprinkler_type": "Quick response bulb"}))
+        else:
+            if inputs["sprinkler_type"].startswith("Quick"):
+                out.append(("Use a standard-response sprinkler", {"sprinkler_type": "Standard response bulb"}))
+            else:
+                out.append(("Use a quick-response sprinkler", {"sprinkler_type": "Quick response bulb"}))
+            if abs(inputs["sprinkler_distance"] - 1.0) > 0.05:
+                out.append((f"Move the sprinkler {units.fmt('length', 1.0, 1)} from the fire",
+                            {"sprinkler_distance": 1.0}))
+            out.append(("Remove the sprinkler", {"sprinkler_type": NO_SPRINKLER}))
+        if inputs["use_heat_detector"]:
+            out.append(("Go back to the smoke alarm", {"use_heat_detector": False}))
+        else:
+            out.append(("Sound the alarm with a heat detector", {"use_heat_detector": True}))
+    return out
+
+
+def sidebar_notes(result, occupant, units, sprinkler=None, heat_detector=None):
+    """One short line of results under each group of inputs in the sidebar."""
+    fmt = units.fmt
+    biggest = max(result.hrr)
+    sizes = [m.threshold_hrr for m in result.flashover if m.threshold_hrr is not None]
+    if result.time_to_peak <= result.t_end:
+        fire = f"Your fire peaks at {fmt('hrr', biggest)} at {seconds(result.time_to_peak)}"
+    else:
+        fire = f"Your fire is still growing at the end ({fmt('hrr', biggest)})"
+    fire += f"; flashover needs about {_hrr_range(min(sizes), max(sizes), units)}."
+    room = (f"The door (opening factor {fmt('opening_factor', result.opening_factor, 2)}) can feed a fire of at most "
+            f"{fmt('hrr', result.ventilation_limit)}. Hottest smoke: {_hottest(result, units)}.")
+    protection = []
+    if sprinkler is not None:
+        protection.append(f"Sprinkler activates at {seconds(result.sprinkler_time)}, holding the fire at "
+                          f"{fmt('hrr', result.sprinkler_hrr)}." if result.sprinkler_time is not None
+                          else f"The sprinkler does not activate within {result.t_end} s.")
+    if heat_detector is not None:
+        protection.append(f"Heat detector alarm at {seconds(result.heat_detector_time)}."
+                          if result.heat_detector_time is not None
+                          else f"The heat detector does not activate within {result.t_end} s.")
+    if not protection:
+        protection.append("Nothing installed: the fire grows unchecked to its peak.")
+    if result.rset is None:
+        people = "No alarm, so no escape time (RSET) can be worked out."
+    else:
+        walk = occupant.walk_distance / occupant.walk_speed
+        people = (f"Escape time RSET = {result.alarm_time:.0f} alarm + {occupant.reaction_time:g} react + "
+                  f"{walk:.0f} walk = {seconds(result.rset)}; "
+                  + (f"the room is untenable at {result.aset} s." if result.aset is not None
+                     else f"the room stays tenable for the whole {result.t_end} s."))
+    return {"fire": fire, "room": room, "protection": " ".join(protection), "people": people}
+
+
+def step_headlines(result, units):
+    """One line per step for the overview."""
+    fmt = units.fmt
+    if result.time_to_peak <= result.t_end:
+        fire = f"Peaks at {fmt('hrr', max(result.hrr))} at {seconds(result.time_to_peak)}."
+    else:
+        fire = f"Still growing at the end: {fmt('hrr', max(result.hrr))}."
+    heat = f"Hottest smoke {_hottest(result, units)}."
+    if result.time_layer_200c is not None:
+        heat += f" Painful radiant heat from {result.time_layer_200c} s."
+    flashover = (f"Predicted at {_range_text(result.flashover_range)}." if result.flashover_range
+                 else "Not reached by any method.")
+    if result.aset is None:
+        escape = "The room stays tenable."
+    elif result.rset is None:
+        escape = f"Untenable at {result.aset} s, and no alarm sounds."
+    else:
+        escape = f"Untenable at {result.aset} s; everyone is out at {seconds(result.rset)}."
+    return {TAB_FIRE: fire, TAB_HEAT: heat, TAB_FLASHOVER: flashover, TAB_ESCAPE: escape}
+
+
+# What the 3D view shows, for the "how to read this view" panel.
+def view_calculated(units):
+    """What the 3D view takes from the model."""
+    return [
+        "**Smoke layer:** how far down it reaches (the model's layer height) and its color, set by its "
+        "temperature: light gray when warm, charcoal when very hot, glowing red above about "
+        f"{units.fmt('temperature', 525)} (the Draper point, where hot soot starts to glow).",
+        "**Flame height:** Heskestad's correlation, L = 0.235 Q^(2/5) − 1.02 D, for the fire size at that "
+        "moment and a burning area that grows with the fire.",
+        "**Smoke pouring out of the door** once the layer is below the top of the door.",
+        "**The occupant:** where they are on the escape timeline (waiting, reacting, walking, out), and red "
+        "once the room is untenable while they are still inside.",
+        "**Sprinkler and heat detector:** hollow until they activate, then filled; the sprinkler's water "
+        "appears when it opens.",
+    ]
+
+
+VIEW_DRAWN = [
+    "**The furniture, walls and hallway**, and the flames starting on top of the burning item. (The "
+    "calculation puts the fire at floor level, which makes slightly more smoke: the cautious choice.)",
+    "**The shapes:** the plume, the soft lower edge of the smoke (the model's layer has a sharp edge), "
+    "flames spreading under the ceiling, the water droplets.",
+    "**Fresh air flowing in** under the smoke at the door: real, but this model leaves it out.",
+]
