@@ -17,7 +17,7 @@ A first-year fire protection engineering project by **Dhruv Sirigiri**
 
 **Live app: https://compartment-fire-calculator.streamlit.app/**
 
-![The Compartment Fire Calculator: inputs, verdict and 3D room view](docs/screenshot.png)
+![The Compartment Fire Calculator: inputs, verdict, step tabs and the 3D room view at a key moment](docs/screenshot.png)
 
 ## What it does
 
@@ -35,19 +35,32 @@ customary units. The app works through four steps:
 It then shows:
 
 - **A verdict**: the flashover time range, when the room becomes untenable (ASET), when
-  everyone is out (RSET), and the safety margin between them. With a sprinkler, also its
-  activation time and what it changed (flashover and smoke temperature with and without it).
-- **A 3D view of the room** you can play like a video: the smoke layer dropping and
-  heating up, flames at Heskestad's flame height, smoke spilling out of the door, the
-  sprinkler spraying once it activates, and the occupant walking to the door. It draws the
-  model's results; it is not a 3D fire simulation (that would need CFD software such as
-  NIST's FDS).
-- **Interactive charts** of fire size, smoke and device temperatures, and smoke layer
-  height, the flashover methods table, and the numbers behind every chart.
-- **"Check the calculation by hand"**: every equation at a moment you choose, with the
-  scenario's numbers substituted in, so each line can be redone with a calculator.
-- **The NUREG-1805 validation table**, an explanation of every method, and an honest
-  section on how realistic the results are.
+  everyone is out (RSET), and the safety margin between them.
+- **"What your last change did"**: change any input and a box under the verdict lists
+  which results moved (before → after, and whether that is better or worse for the
+  people inside) and explains why, with the numbers from the equations (for example,
+  "the opening factor went from 2.74 to 5.48 m⁵ᐟ², so the Babrauskas threshold went from
+  2,054 to 4,108 kW"). One click undoes the change.
+- **One tab per step** (Fire, Smoke temperature, Flashover, Escape, and Sprinklers &
+  detectors). Each explains in plain language what that step shows for your inputs, has
+  its readouts and chart, **"Try this" buttons** that change one input so you can see what
+  it does, and the step's method and equations. Back and Next buttons make a guided tour.
+  A short note under each group of inputs in the sidebar also gives its current result.
+- **An overview** with each step's headline result and the key moments of the fire in
+  order (alarm, smoke at head height, flashover, ...), each with a button to see it in 3D.
+- **A 3D view of the room** you can play like a video: smoke colored by its temperature
+  (gray when warm, charcoal when very hot, glowing red above about 525 °C), flames at
+  Heskestad's flame height on the burning furniture, smoke spilling out of the door, the
+  sprinkler spraying once it activates, and the occupant walking to the door, with labels
+  pinned to the scene. Pick a key moment and the app describes what is happening at that
+  moment; a panel says what is calculated and what is only drawn. It is a picture of the
+  model's results, not a 3D fire simulation (that would need CFD software such as NIST's
+  FDS).
+- **"Check the math"**: every equation at a moment you choose, with the scenario's
+  numbers substituted in, so each line can be redone with a calculator, and the numbers
+  behind every chart.
+- **Methods & validation**: the NUREG-1805 validation table, an honest section on how
+  realistic the results are, the limitations and the sources.
 
 ## The methods
 
@@ -271,11 +284,13 @@ fire_model/          the physics, as pure functions (no user interface code), SI
   timeline.py        "first second at which something happens" helpers
   scenario.py        runs all the steps for one scenario
   validation.py      the NUREG-1805 comparisons (NRC inputs, answers and cells)
-app.py               the Streamlit web app: inputs, verdict, page layout
+app.py               the Streamlit web app: inputs, verdict, "what your last change did", tabs
+guide.py             plain-language explanations that follow the inputs: each step's result,
+                     what a change did and why, "Try this" suggestions, key moments
 charts.py            the 2D charts
 room_view.py         the 3D room view
 worked_example.py    "check the calculation by hand"
-explanations.py      the explanatory text, validation and realism sections
+explanations.py      the methods and equations of each step, validation, realism, sources
 units.py             metric / US customary conversions for display
 tests/               pytest tests, including every check value and NRC example
 docs/VALIDATION.md   the NUREG-1805 validation report

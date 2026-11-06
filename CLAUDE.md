@@ -18,7 +18,11 @@ The Python/Streamlit app is built and deployed at https://compartment-fire-calcu
 
 `index.html` is the original single-file prototype (HTML + vanilla JS). It is the reference implementation: with no sprinkler and no heat detector, the app must reproduce its results (see "Check values" below).
 
-Beyond the prototype the app has: sprinkler and heat detector activation; a metric / US customary unit switch (display only, the physics stays in SI); a 3D view (Heskestad flame height, plume, door spill, sprinkler spray, occupant); a "check the calculation by hand" section; and validation against the NUREG-1805 spreadsheets (`fire_model/validation.py`, `docs/VALIDATION.md`).
+Beyond the prototype the app has: sprinkler and heat detector activation; a metric / US customary unit switch (display only, the physics stays in SI); a 3D view (cutaway room with furniture, Heskestad flame height, smoke colored by temperature, door spill, sprinkler spray, occupant, labels pinned to the scene); a "check the calculation by hand" section; and validation against the NUREG-1805 spreadsheets (`fire_model/validation.py`, `docs/VALIDATION.md`).
+
+It is laid out as an interactive guide: the verdict, then a "What your last change did" box (which results moved, before → after, better or worse, and why, with Undo), then tabs: Overview (step headlines and key moments), one tab per step (explanation for the current inputs, readouts, chart, "Try this" buttons that change one input, the method and equations, Back/Next), Sprinklers & detectors, 3D view (key moments, a description of the chosen moment, what is calculated vs. only drawn), Check the math, and Methods & validation. A one-line result sits under each group of inputs in the sidebar. All of these sentences come from `guide.py`, built only from `fire_model` numbers.
+
+Streamlit notes (1.67): only the open tab is drawn (`st.tabs(..., on_change="rerun")` and `tab.open`), so widgets inside a tab use `persist_state="page"` to keep their value while it is closed. A menu (`selectbox`, `radio`) remembers its choice by its displayed label, so labels must never depend on the unit switch or on results (a unit in a fuel label once crashed the app after switching units); put such numbers in a caption.
 
 ## Target architecture (recommended)
 
@@ -30,7 +34,7 @@ Beyond the prototype the app has: sprinkler and heat detector activation; a metr
 
 Keep the physics independent of the UI so it can be tested and reused.
 
-As built: `fire_model/` also has `room.py` (geometry), `timeline.py` (first-time helpers), `scenario.py` (runs every step), `detection.py` (sprinklers and heat detectors) and `validation.py` (NUREG-1805 cases). The UI is split into `app.py` (inputs, verdict, layout), `charts.py`, `room_view.py` (3D), `worked_example.py`, `explanations.py` and `units.py`.
+As built: `fire_model/` also has `room.py` (geometry), `timeline.py` (first-time helpers), `scenario.py` (runs every step), `detection.py` (sprinklers and heat detectors) and `validation.py` (NUREG-1805 cases). The UI is split into `app.py` (inputs, verdict, change box, tabs), `guide.py` (plain-language explanations that follow the inputs), `charts.py`, `room_view.py` (3D), `worked_example.py`, `explanations.py` (each step's method and equations, validation, realism, sources) and `units.py`.
 
 ## The model
 
@@ -73,6 +77,7 @@ Ambient T_a = 20 °C. Head height for tenability = 1.8 m.
 
 ### Flame height (3D view and the flame-tip check only)
 - Heskestad: L = 0.235 Q^(2/5) − 1.02 D (NUREG-1805 Ch. 3), clipped at 0. Burning diameter grows with the fire, D = D_full √(Q/Q_peak) (a t-squared fire is steady spread at constant HRR per unit area, so area ∝ Q). D_full is a user input (default 1.0 m, an assumption).
+- The 3D view draws the flames from the top of the burning furniture (illustrative sizes per fuel, e.g. a 0.45 m sofa seat) and its description measures "reaches the ceiling" from there; the calculation itself keeps the fire at floor level (more plume entrainment, the cautious choice). Smoke color: gray to charcoal with temperature, glowing toward red above the Draper point (≈525 °C).
 
 ## Check values (the rebuilt model must match these)
 
