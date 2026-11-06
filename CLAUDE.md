@@ -14,7 +14,7 @@ Dhruv is new to programming and to fire dynamics (currently in Calculus III). Wh
 
 ## Current state
 
-The Python/Streamlit app is built and deployed at https://compartment-fire-calculator.streamlit.app/ (code: https://github.com/dhruvsirigiri/compartment-fire-calculator). Streamlit Community Cloud redeploys automatically when `main` is pushed.
+The Python/Streamlit app is built and deployed at https://compartment-fire-calculator.streamlit.app/ (code: https://github.com/dhruvsirigiri/compartment-fire-calculator). Streamlit Community Cloud redeploys automatically when `main` is pushed. It keeps the Python process running, so `app.py` starts by reloading the project's own modules when any project `.py` file has changed (without that, an update made while nobody had the app open left old modules in memory and caused an ImportError). If the live app ever shows a stale-code error anyway, reboot it from "Manage app" on share.streamlit.io.
 
 `index.html` is the original single-file prototype (HTML + vanilla JS). It is the reference implementation: with no sprinkler and no heat detector, the app must reproduce its results (see "Check values" below).
 
