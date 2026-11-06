@@ -1,0 +1,22 @@
+# Files git should NOT track. These are generated automatically or are
+# specific to one computer, so they don't belong in the repository.
+
+# The virtual environment (anyone can rebuild it from requirements.txt)
+.venv/
+venv/
+
+# Python's compiled bytecode caches
+__pycache__/
+*.py[cod]
+
+# Test-runner cache
+.pytest_cache/
+
+# Streamlit secrets (never commit passwords or keys)
+.streamlit/secrets.toml
+
+# Editor and operating-system clutter
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

@@ -1,0 +1,853 @@
+<title>Compartment Fire Calculator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: lab-notebook tool. Step rail, inputs left, verdict + linked charts right, explanations below. */
+:root {
+  --bg: #F3F4F6;
+  --panel: #FFFFFF;
+  --ink: #18202C;
+  --muted: #5A6475;
+  --line: #D9DDE4;
+  --ember: #C2410C;
+  --ember-soft: #FDE7DC;
+  --heat: #B91C1C;
+  --warn: #B45309;
+  --safe: #15803D;
+  --cool: #1D4ED8;
+  --steel: #8A94A6;
+  --grid: #E7EAEF;
+  --smoke: #6B7280;
+  --display: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body: "IBM Plex Sans", "Segoe UI", Roboto, sans-serif;
+  --mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+}
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) {
+  --bg: #11151C; --panel: #1A2029; --ink: #E8EBF0; --muted: #9AA3B2; --line: #2C3441;
+  --ember: #FB7A3C; --ember-soft: #3A2117; --heat: #F87171; --warn: #FBBF24; --safe: #4ADE80; --cool: #60A5FA;
+  --steel: #6B7586; --grid: #252C37; --smoke: #9CA3AF; color-scheme: dark; } }
+:root[data-theme="dark"] {
+  --bg: #11151C; --panel: #1A2029; --ink: #E8EBF0; --muted: #9AA3B2; --line: #2C3441;
+  --ember: #FB7A3C; --ember-soft: #3A2117; --heat: #F87171; --warn: #FBBF24; --safe: #4ADE80; --cool: #60A5FA;
+  --steel: #6B7586; --grid: #252C37; --smoke: #9CA3AF; color-scheme: dark; }
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--ink); font-family: var(--body); font-size: 15px; line-height: 1.6; }
+.wrap { max-width: 1160px; margin: 0 auto; padding-block: 28px 56px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  display: grid; gap: 22px; }
+header h1 { font-family: var(--display); font-weight: 800; font-size: clamp(26px, 4vw, 36px); line-height: 1.1; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+header p { margin: 6px 0 0; color: var(--muted); max-width: 66ch; }
+.eyebrow { font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ember); }
+
+.steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; list-style: none; padding: 0; margin: 0; }
+.steps li { border-top: 3px solid var(--ember); padding-top: 8px; font-size: 13px; }
+.steps li b { display: block; font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--ember); }
+
+.main { display: grid; grid-template-columns: 310px minmax(0, 1fr); gap: 22px; align-items: start; }
+.panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 20px; min-width: 0; }
+.controls { display: grid; gap: 22px; position: sticky; top: calc(env(safe-area-inset-top, 0px) + 12px); max-height: calc(100vh - 24px); overflow-y: auto; }
+.group { display: grid; gap: 14px; }
+.group + .group { border-top: 1px solid var(--line); padding-top: 20px; }
+.group h3 { margin: 0; font-family: var(--mono); font-weight: 500; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ember); }
+.field { display: grid; gap: 6px; min-width: 0; }
+.field label, .field .lbl { font-size: 13px; font-weight: 600; }
+.hint { font-size: 12.5px; color: var(--muted); line-height: 1.45; }
+.seg { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; }
+.seg button { font: inherit; font-size: 13px; padding: 8px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer; text-align: left; }
+.seg button span { display: block; font-family: var(--mono); font-size: 11px; color: var(--muted); }
+.seg button[aria-pressed="true"] { border-color: var(--ember); background: var(--ember-soft); }
+button:focus-visible, select:focus-visible, input:focus-visible { outline: 2px solid var(--ember); outline-offset: 2px; }
+select, input[type=number] { font: inherit; font-size: 14px; padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); color: var(--ink); width: 100%; min-width: 0; }
+input[type=number] { font-family: var(--mono); }
+input[type=range] { width: 100%; accent-color: var(--ember); }
+.rangeval { font-family: var(--mono); font-size: 13px; }
+.trio { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.duo { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.trio .field label, .duo .field label { font-weight: 500; font-size: 12px; color: var(--muted); }
+
+.charts { display: grid; gap: 22px; min-width: 0; }
+.verdict { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 0; }
+.verdict .cell { padding: 0 14px; border-left: 1px solid var(--line); min-width: 0; }
+.verdict .cell:first-child { padding-left: 0; border-left: 0; }
+.verdict .k { font-size: 12px; color: var(--muted); }
+.verdict .v { font-family: var(--mono); font-size: 24px; font-weight: 500; line-height: 1.25; font-variant-numeric: tabular-nums; }
+.verdict .v small { font-size: 12px; color: var(--muted); margin-left: 3px; }
+.verdict .s { font-size: 12.5px; color: var(--muted); line-height: 1.4; margin-top: 2px; }
+.banner { margin-top: 16px; padding: 10px 14px; border-radius: 7px; font-size: 14px; border: 1px solid; }
+.banner.ok { color: var(--safe); border-color: color-mix(in srgb, var(--safe) 45%, transparent); background: color-mix(in srgb, var(--safe) 9%, transparent); }
+.banner.bad { color: var(--heat); border-color: color-mix(in srgb, var(--heat) 45%, transparent); background: color-mix(in srgb, var(--heat) 9%, transparent); }
+.banner b { font-weight: 600; }
+
+.chead { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 12px; }
+.chead h2 { font-family: var(--display); font-weight: 700; font-size: 17px; margin: 0; }
+.chead span { font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
+.readouts { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); border-bottom: 1px solid var(--line); margin-bottom: 14px; padding-bottom: 14px; }
+.ro { padding: 0 12px; border-left: 1px solid var(--line); min-width: 0; }
+.ro:first-child { padding-left: 0; border-left: 0; }
+.ro .k { font-size: 12px; color: var(--muted); }
+.ro .v { font-family: var(--mono); font-size: 19px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.ro .v small { font-size: 12px; color: var(--muted); margin-left: 3px; }
+.alarm { color: var(--heat); }
+.chartbox { position: relative; }
+svg { display: block; width: 100%; height: auto; touch-action: pan-y; }
+svg text { font-family: var(--mono); font-size: 11px; fill: var(--muted); }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 12.5px; color: var(--muted); margin-top: 8px; }
+.legend i { display: inline-block; width: 18px; height: 0; border-top: 3px solid var(--ember); vertical-align: middle; margin-right: 6px; }
+.legend i.ref { border-top: 1.5px dashed var(--steel); }
+.legend i.hot { border-top-color: var(--heat); }
+.legend i.out { border-top: 3px dotted var(--heat); }
+.legend i.band { height: 10px; border: 0; background: color-mix(in srgb, var(--heat) 18%, transparent); }
+.legend i.vent { border-top: 1.5px dashed var(--cool); }
+.legend i.smk { border-top-color: var(--smoke); }
+.legend i.aset { border-top: 2px solid var(--heat); }
+.legend i.rset { border-top: 2px solid var(--cool); }
+.tip { position: absolute; pointer-events: none; background: var(--ink); color: var(--panel); font-family: var(--mono); font-size: 12px; padding: 6px 8px; border-radius: 5px; white-space: nowrap; transform: translate(-50%, -120%); z-index: 2; }
+
+.fo-table { margin-top: 14px; }
+table { border-collapse: collapse; width: 100%; font-size: 13.5px; }
+th, td { text-align: left; padding: 7px 8px; border-bottom: 1px solid var(--line); }
+th { font-weight: 600; font-size: 12px; color: var(--muted); }
+td.n { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+.tablewrap { overflow-x: auto; }
+
+.scene-ctrl { display: flex; align-items: center; gap: 12px; margin-top: 10px; flex-wrap: wrap; }
+.scene-ctrl input { flex: 1; min-width: 160px; }
+.btn { font: inherit; font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 6px; border: 1px solid var(--ember); background: var(--ember); color: var(--panel); cursor: pointer; }
+.btn.ghost { background: transparent; color: var(--ember); }
+
+.learn { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 22px; }
+.learn .tag { font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--ember); }
+.learn h2 { font-family: var(--display); font-weight: 700; font-size: 19px; margin: 2px 0 8px; text-wrap: balance; }
+.learn p { margin: 0 0 10px; max-width: 65ch; }
+.learn ul { margin: 0 0 10px; padding-left: 20px; }
+.learn li { margin-bottom: 4px; }
+.eq { font-family: var(--mono); font-size: 15px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 11px 14px; margin: 10px 0; overflow-x: auto; white-space: nowrap; }
+.eq sup, .eq sub { font-size: 11px; }
+footer { font-size: 12.5px; color: var(--muted); }
+
+@media (max-width: 900px) {
+  .main, .learn { grid-template-columns: minmax(0, 1fr); }
+  .controls { position: static; max-height: none; }
+  .readouts, .verdict { grid-template-columns: repeat(2, minmax(0, 1fr)); row-gap: 14px; }
+  .ro:nth-child(3), .verdict .cell:nth-child(3) { padding-left: 0; border-left: 0; }
+  .steps { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+</style>
+
+<div class="wrap">
+  <header>
+    <div class="eyebrow">Fire protection engineering · Learning tool</div>
+    <h1>Compartment Fire Calculator</h1>
+    <p>Predicts how a fire in a single room grows, how hot the smoke gets, whether the room reaches flashover, and whether the people inside get out in time. Every result comes from a standard hand-calculation method in fire dynamics, explained below.</p>
+  </header>
+
+  <ol class="steps" aria-label="Calculation steps">
+    <li><b>Step 1</b>Fire growth (heat release rate)</li>
+    <li><b>Step 2</b>Hot smoke layer temperature</li>
+    <li><b>Step 3</b>Flashover and the air supply limit</li>
+    <li><b>Step 4</b>Smoke filling and escape time</li>
+  </ol>
+
+  <section class="main">
+    <div class="panel controls" aria-label="Inputs">
+      <div class="group">
+        <h3>Step 1 · The fire</h3>
+        <div class="field">
+          <span class="lbl" id="growth-lbl">Fire growth rate</span>
+          <div class="seg" role="group" aria-labelledby="growth-lbl" id="growth"></div>
+          <span class="hint" id="growth-hint"></span>
+        </div>
+        <div class="field">
+          <label for="fuel">What's burning (sets the peak size)</label>
+          <select id="fuel"></select>
+        </div>
+        <div class="field">
+          <label for="qmax">Peak heat release rate</label>
+          <input type="range" id="qmax" min="50" max="5000" step="50">
+          <span class="rangeval" id="qmax-val"></span>
+        </div>
+        <div class="field">
+          <label for="tend">Time to simulate</label>
+          <input type="range" id="tend" min="60" max="1200" step="30">
+          <span class="rangeval" id="tend-val"></span>
+        </div>
+      </div>
+
+      <div class="group">
+        <h3>Step 2 · The room</h3>
+        <div class="field">
+          <label for="preset">Room type</label>
+          <select id="preset"></select>
+        </div>
+        <div class="trio">
+          <div class="field"><label for="rl">Length (m)</label><input type="number" id="rl" min="1" max="30" step="0.1"></div>
+          <div class="field"><label for="rw">Width (m)</label><input type="number" id="rw" min="1" max="30" step="0.1"></div>
+          <div class="field"><label for="rh">Height (m)</label><input type="number" id="rh" min="2" max="10" step="0.1"></div>
+        </div>
+        <div class="field">
+          <span class="lbl">Door or opening</span>
+          <div class="duo">
+            <div class="field"><label for="dw">Width (m)</label><input type="number" id="dw" min="0.2" max="10" step="0.1"></div>
+            <div class="field"><label for="dh">Height (m)</label><input type="number" id="dh" min="0.3" max="10" step="0.1"></div>
+          </div>
+        </div>
+        <div class="field">
+          <label for="mat">Wall and ceiling lining</label>
+          <select id="mat"></select>
+        </div>
+        <div class="field">
+          <label for="thk">Lining thickness (mm)</label>
+          <input type="number" id="thk" min="3" max="500" step="1">
+        </div>
+        <span class="hint alarm" id="room-err" hidden></span>
+      </div>
+
+      <div class="group">
+        <h3>Step 4 · The people</h3>
+        <div class="field">
+          <label for="occ">Occupant scenario</label>
+          <select id="occ"></select>
+        </div>
+        <div class="duo">
+          <div class="field"><label for="tdet">Detection (s)</label><input type="number" id="tdet" min="0" max="900" step="5"></div>
+          <div class="field"><label for="tpre">Reaction (s)</label><input type="number" id="tpre" min="0" max="1800" step="5"></div>
+          <div class="field"><label for="dist">Walk to door (m)</label><input type="number" id="dist" min="0" max="100" step="0.5"></div>
+          <div class="field"><label for="speed">Walk speed (m/s)</label><input type="number" id="speed" min="0.2" max="2" step="0.1"></div>
+        </div>
+        <span class="hint">Detection is when the alarm sounds. Reaction is how long people take to notice, decide and start moving.</span>
+      </div>
+    </div>
+
+    <div class="charts">
+      <div class="panel" aria-live="polite">
+        <div class="verdict">
+          <div class="cell"><div class="k">Flashover</div><div class="v" id="v-fo"></div><div class="s" id="v-fo-s"></div></div>
+          <div class="cell"><div class="k">Room becomes untenable</div><div class="v" id="v-aset"></div><div class="s" id="v-aset-s"></div></div>
+          <div class="cell"><div class="k">Everyone is out</div><div class="v" id="v-rset"></div><div class="s" id="v-rset-s"></div></div>
+          <div class="cell"><div class="k">Safety margin</div><div class="v" id="v-margin"></div><div class="s">Untenable time minus escape time</div></div>
+        </div>
+        <div class="banner" id="banner"></div>
+      </div>
+
+      <div class="panel">
+        <div class="chead"><h2>What it looks like inside</h2><span>Step 4 · Room cross-section</span></div>
+        <svg id="scene" viewBox="0 0 720 270" role="img" aria-label="Cross-section of the room showing the fire, smoke layer and occupant at the selected time"></svg>
+        <div class="scene-ctrl">
+          <button class="btn" id="play" type="button">Play</button>
+          <label for="scene-t" class="hint" style="white-space:nowrap">Time</label>
+          <input type="range" id="scene-t" min="0" max="600" step="1">
+          <span class="rangeval" id="scene-val"></span>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="chead"><h2>Fire size over time</h2><span>Steps 1 &amp; 3 · Heat release rate</span></div>
+        <div class="readouts">
+          <div class="ro"><div class="k">Growth coefficient α</div><div class="v" id="r-alpha"></div></div>
+          <div class="ro"><div class="k">Time to peak</div><div class="v" id="r-tp"></div></div>
+          <div class="ro"><div class="k">Air supply limit</div><div class="v" id="r-vent"></div></div>
+          <div class="ro"><div class="k">Energy released</div><div class="v" id="r-e"></div></div>
+        </div>
+        <div class="chartbox">
+          <svg id="chart-q" viewBox="0 0 720 300" role="img" aria-label="Heat release rate versus time with flashover thresholds"></svg>
+          <div class="tip" id="tip-q" hidden></div>
+        </div>
+        <div class="legend"><span><i></i>Your fire</span><span><i class="band"></i>Flashover range (3 methods)</span><span><i class="vent"></i>Air supply limit</span><span><i class="ref"></i>Other growth rates</span></div>
+        <div class="tablewrap fo-table"><table>
+          <thead><tr><th>Flashover method</th><th>Minimum fire size</th><th>Your fire reaches it at</th></tr></thead>
+          <tbody id="fo-rows"></tbody>
+        </table></div>
+      </div>
+
+      <div class="panel">
+        <div class="chead"><h2>Hot smoke layer temperature</h2><span>Step 2 · MQH method</span></div>
+        <div class="readouts">
+          <div class="ro"><div class="k">Opening factor A<sub>o</sub>√H<sub>o</sub></div><div class="v" id="r-of"></div></div>
+          <div class="ro"><div class="k">Wall heat-soak time t<sub>p</sub></div><div class="v" id="r-tpen"></div></div>
+          <div class="ro"><div class="k">Layer reaches 200 °C</div><div class="v" id="r-t200"></div></div>
+          <div class="ro"><div class="k">Layer reaches 600 °C</div><div class="v" id="r-t600"></div></div>
+        </div>
+        <div class="chartbox">
+          <svg id="chart-t" viewBox="0 0 720 300" role="img" aria-label="Hot smoke layer temperature versus time"></svg>
+          <div class="tip" id="tip-t" hidden></div>
+        </div>
+        <div class="legend"><span><i class="hot"></i>Smoke layer temperature</span><span><i class="out"></i>Above 600 °C, outside the method's range</span></div>
+      </div>
+
+      <div class="panel">
+        <div class="chead"><h2>Smoke layer height</h2><span>Step 4 · Smoke filling</span></div>
+        <div class="readouts">
+          <div class="ro"><div class="k">Floor area</div><div class="v" id="r-area"></div></div>
+          <div class="ro"><div class="k">Smoke reaches door top</div><div class="v" id="r-tdoor"></div></div>
+          <div class="ro"><div class="k">Smoke reaches 1.8 m</div><div class="v" id="r-t18"></div></div>
+          <div class="ro"><div class="k">Height at end</div><div class="v" id="r-zend"></div></div>
+        </div>
+        <div class="chartbox">
+          <svg id="chart-z" viewBox="0 0 720 300" role="img" aria-label="Smoke layer interface height versus time with escape times"></svg>
+          <div class="tip" id="tip-z" hidden></div>
+        </div>
+        <div class="legend"><span><i class="smk"></i>Bottom of smoke layer</span><span><i class="aset"></i>Untenable (ASET)</span><span><i class="rset"></i>Everyone out (RSET)</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="learn">
+    <div class="panel">
+      <div class="tag">Step 1</div>
+      <h2>How big is the fire?</h2>
+      <p>The <b>heat release rate</b> (HRR) is how much energy a fire gives off each second, in kilowatts (kW). Smoke temperature, smoke production and flashover all depend on it, so every later step uses this curve as its input.</p>
+      <div class="eq">Q(t) = α · t<sup>2</sup></div>
+      <p><b>Q</b> is the heat release rate in kW, <b>t</b> is time since ignition in seconds, and <b>α</b> is the growth coefficient in kW/s². Because time is squared, doubling the time makes the fire four times bigger. The fire then holds at a <b>peak HRR</b> set by what is burning.</p>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Growth rate</th><th>t<sub>g</sub> (s)</th><th>α (kW/s²)</th><th>Typical fuel</th></tr></thead>
+        <tbody id="ref-table"></tbody>
+      </table></div>
+      <p style="margin-top:10px">Each rate is defined by the time t<sub>g</sub> to reach 1,055 kW (1,000 BTU/s), so α = 1055 / t<sub>g</sub>².</p>
+    </div>
+
+    <div class="panel">
+      <div class="tag">Step 2</div>
+      <h2>How hot does the smoke get?</h2>
+      <p>The plume carries hot gas to the ceiling, where it forms a smoke layer. The <b>MQH method</b> (McCaffrey, Quintiere and Harkleroad, 1981) predicts the layer's average temperature from an energy balance: heat comes in from the fire and leaves out the door and into the walls.</p>
+      <div class="eq">ΔT<sub>g</sub> = 6.85 · [ Q<sup>2</sup> / (A<sub>o</sub>√H<sub>o</sub> · h<sub>k</sub> · A<sub>T</sub>) ]<sup>1/3</sup></div>
+      <ul>
+        <li><b>A<sub>o</sub>√H<sub>o</sub></b>, the opening factor: door area times the square root of its height. Taller doors vent hot gas better.</li>
+        <li><b>A<sub>T</sub></b>, the inside surface area of walls, ceiling and floor minus the door.</li>
+        <li><b>h<sub>k</sub></b>, how easily the walls absorb heat. Early on, heat only soaks into the surface: h<sub>k</sub> = √(kρc/t). After the thermal penetration time t<sub>p</sub> = (ρc/k)(δ/2)², heat flows through the wall: h<sub>k</sub> = k/δ.</li>
+      </ul>
+      <div class="tablewrap"><table>
+        <thead><tr><th>Lining</th><th>k (kW/m·K)</th><th>ρ (kg/m³)</th><th>c (kJ/kg·K)</th></tr></thead>
+        <tbody id="mat-table"></tbody>
+      </table></div>
+    </div>
+
+    <div class="panel">
+      <div class="tag">Step 3</div>
+      <h2>When does the room flash over?</h2>
+      <p><b>Flashover</b> is the sudden switch from a fire burning one object to a room where every exposed surface is burning. Radiation from the hot smoke layer heats everything below it until it all ignites at once. After flashover, nobody in the room survives, and the fire can spread to the rest of the building. Three classic methods estimate the smallest fire that can cause it:</p>
+      <div class="eq">Babrauskas: Q<sub>FO</sub> = 750 · A<sub>o</sub>√H<sub>o</sub></div>
+      <div class="eq">Thomas: Q<sub>FO</sub> = 7.8 · A<sub>T</sub> + 378 · A<sub>o</sub>√H<sub>o</sub></div>
+      <div class="eq">MQH: Q<sub>FO</sub> = 610 · (h<sub>k</sub> · A<sub>T</sub> · A<sub>o</sub>√H<sub>o</sub>)<sup>1/2</sup></div>
+      <p>The MQH version is just Step 2 solved backwards for the fire size that makes the smoke about 500 °C hotter than ambient, so the calculator reads it straight off the temperature curve. The methods disagree, which is normal. Engineers look at the whole range rather than trusting one number.</p>
+      <p><b>The air supply limit.</b> A fire needs oxygen, and in a closed room almost all of it comes through the door. The air that can flow in is about 0.5 · A<sub>o</sub>√H<sub>o</sub> kg/s, and burning 1 kg of air releases about 3,000 kJ. So the biggest fire the door can support is roughly <b>Q<sub>vent</sub> = 1,500 · A<sub>o</sub>√H<sub>o</sub> kW</b>. The calculator caps the fire at this value. A fire held back by its air supply is called <b>ventilation-controlled</b>.</p>
+    </div>
+
+    <div class="panel">
+      <div class="tag">Step 4</div>
+      <h2>Do people get out in time?</h2>
+      <p>Fire safety design compares two times. <b>ASET</b> (available safe egress time) is how long until the room becomes untenable. <b>RSET</b> (required safe egress time) is how long people need to get out. The design works only if ASET is longer than RSET.</p>
+      <p><b>Smoke filling.</b> The plume pulls in, or entrains, room air as it rises, so it carries much more mass to the ceiling than the fire itself produces. The calculator uses Heskestad's plume equation, with 70% of the fire's heat carried by the plume:</p>
+      <div class="eq">ṁ<sub>p</sub> = 0.071 · Q<sub>c</sub><sup>1/3</sup> · z<sup>5/3</sup> + 0.0018 · Q<sub>c</sub> &nbsp;(kg/s)</div>
+      <p>z is the height of the smoke layer's bottom edge. Each second, the calculator adds the plume's mass to the layer, subtracts the smoke flowing out of the top of the door once the layer drops below the door top, and converts the layer's mass to a depth using the smoke density from Step 2. That is a small differential equation solved step by step, the same idea as Euler's method in calculus.</p>
+      <p><b>Untenable</b> here means the earlier of two events: the smoke layer drops to 1.8 m (head height, so people breathe it), or the layer reaches 200 °C (painful radiant heat from above). RSET is detection time plus reaction time plus walking time.</p>
+    </div>
+
+    <div class="panel">
+      <div class="tag">Limits</div>
+      <h2>What this calculator leaves out</h2>
+      <ul>
+        <li>One room with one opening. Smoke spreading to other rooms is not modeled.</li>
+        <li>The fire sits on the floor and never decays or burns out.</li>
+        <li>No sprinklers. A sprinkler would cap or shrink the fire once it activates.</li>
+        <li>The smoke layer uses one average temperature (from MQH), and MQH is a fit to tests below about 600 °C.</li>
+        <li>Untenability is judged by layer height and temperature only, not by toxic gases or visibility.</li>
+        <li>The occupant walks straight to the door at a steady speed.</li>
+      </ul>
+      <p>Real designs use full zone models such as CFAST, or CFD models such as FDS, both free from NIST, along with safety factors. This tool shows the physics those models are built on.</p>
+    </div>
+
+    <div class="panel">
+      <div class="tag">Sources</div>
+      <h2>Methods and data</h2>
+      <ul>
+        <li>t-squared growth classes: NFPA 72, Annex B.</li>
+        <li>Hot gas layer temperature and MQH flashover: McCaffrey, Quintiere and Harkleroad, <i>Fire Technology</i> 17 (1981).</li>
+        <li>Flashover correlations: Babrauskas (1980); Thomas (1981).</li>
+        <li>Plume entrainment: Heskestad, in the SFPE Handbook of Fire Protection Engineering.</li>
+        <li>Implementation of these methods and material properties: U.S. NRC NUREG-1805, Fire Dynamics Tools.</li>
+        <li>ASET/RSET framework: SFPE Engineering Guide to Human Behavior in Fire.</li>
+      </ul>
+      <p>Peak fire sizes and room presets are rounded, generic examples.</p>
+    </div>
+  </section>
+
+  <footer>A learning tool built step by step as a first-year fire protection engineering project. Not for real design decisions.</footer>
+</div>
+
+<script>
+/* ===================== Data ===================== */
+const T_AMB = 20;            // ambient temperature, °C
+const HEAD_HEIGHT = 1.8;     // tenability height, m
+const T_RADIANT = 200;       // layer temperature causing painful radiation below, °C
+const T_FO_MQH = T_AMB + 500;
+
+const GROWTH = [
+  { id: "slow", name: "Slow", tg: 600, fuel: "Dense wood furniture" },
+  { id: "medium", name: "Medium", tg: 300, fuel: "Cotton or polyester bedding" },
+  { id: "fast", name: "Fast", tg: 150, fuel: "Upholstered furniture, stacked boxes" },
+  { id: "ultrafast", name: "Ultrafast", tg: 75, fuel: "Flammable liquid pool, thin plastics" }
+];
+GROWTH.forEach(g => g.alpha = 1055 / (g.tg * g.tg));
+const FUELS = [
+  { name: "Wastebasket", q: 100 }, { name: "Office chair", q: 750 },
+  { name: "Upholstered armchair", q: 1200 }, { name: "Sofa", q: 2500 },
+  { name: "Mattress and bed", q: 2000 }, { name: "Custom", q: null }
+];
+const MATERIALS = [
+  { name: "Gypsum board", k: 0.00017, rho: 960, c: 1.1, thk: 16 },
+  { name: "Concrete", k: 0.0016, rho: 2400, c: 0.75, thk: 150 },
+  { name: "Brick", k: 0.0008, rho: 2600, c: 0.8, thk: 100 },
+  { name: "Plywood", k: 0.00012, rho: 540, c: 2.5, thk: 13 },
+  { name: "Fiber insulation board", k: 0.00053, rho: 240, c: 1.25, thk: 25 }
+];
+const PRESETS = [
+  { name: "Dorm room (example)", l: 4.5, w: 3.5, h: 2.6, dw: 0.9, dh: 2.1, mat: 0 },
+  { name: "Bedroom", l: 5, w: 4, h: 2.4, dw: 0.9, dh: 2.0, mat: 0 },
+  { name: "Small office", l: 4, w: 3, h: 2.7, dw: 0.9, dh: 2.1, mat: 0 },
+  { name: "Living room, wide opening", l: 7, w: 6, h: 2.4, dw: 1.8, dh: 2.1, mat: 0 },
+  { name: "Concrete storage room", l: 5, w: 5, h: 3, dw: 0.9, dh: 2.1, mat: 1 },
+  { name: "Custom", custom: true }
+];
+const OCCUPANTS = [
+  { name: "Awake, smoke alarm in room", det: 30, pre: 30, dist: 4, speed: 1.2 },
+  { name: "Asleep, smoke alarm in room", det: 30, pre: 120, dist: 4, speed: 1.0 },
+  { name: "Awake, no alarm (notices fire)", det: 90, pre: 60, dist: 4, speed: 1.2 },
+  { name: "Needs help to move", det: 30, pre: 90, dist: 4, speed: 0.5 },
+  { name: "Custom", custom: true }
+];
+
+/* ===================== Model (pure functions) ===================== */
+// Step 1: t-squared fire
+function hrr(t, alpha, qmax) { return Math.min(alpha * t * t, qmax); }
+function timeToReach(q, alpha) { return Math.sqrt(q / alpha); }
+
+// Step 2: geometry, wall heat loss, MQH layer temperature
+function roomGeometry(r) {
+  const Ao = r.dw * r.dh;
+  const AT = 2 * (r.l * r.w + r.l * r.h + r.w * r.h) - Ao;
+  return { Ao, AT, floor: r.l * r.w, openingFactor: Ao * Math.sqrt(r.dh) };
+}
+function penetrationTime(m, thkM) { return (m.rho * m.c / m.k) * (thkM / 2) ** 2; }
+function hk(t, m, thkM) { return t < penetrationTime(m, thkM) ? Math.sqrt(m.k * m.rho * m.c / t) : m.k / thkM; }
+function layerTemp(t, Q, room, m) {
+  if (t <= 0 || Q <= 0) return T_AMB;
+  const g = roomGeometry(room);
+  return T_AMB + 6.85 * Math.cbrt(Q * Q / (g.openingFactor * hk(t, m, room.thk / 1000) * g.AT));
+}
+
+// Step 3: air supply limit and flashover thresholds
+function ventLimit(room) { return 1500 * roomGeometry(room).openingFactor; }
+function effectiveHRR(t, fire, room) { return Math.min(hrr(t, fire.alpha, fire.qmax), ventLimit(room)); }
+function flashoverThresholds(room) {
+  const g = roomGeometry(room);
+  return { babrauskas: 750 * g.openingFactor, thomas: 7.8 * g.AT + 378 * g.openingFactor };
+}
+
+// Step 4: two-zone smoke filling (Heskestad plume in, door outflow out)
+function plumeEntrainment(Q, z) {
+  if (Q <= 0 || z <= 0) return 0;
+  const Qc = 0.7 * Q;
+  return 0.071 * Math.cbrt(Qc) * z ** (5 / 3) + 0.0018 * Qc;
+}
+function doorOutflow(room, z, TgK) {
+  if (z >= room.dh) return 0;
+  const TaK = T_AMB + 273.15, rhoG = 353 / TgK, g = 9.81, Cd = 0.7;
+  const buoy = Math.max(0, 1 - TaK / TgK);  // (rho_a - rho_g) / rho_a
+  return (2 / 3) * Cd * room.dw * rhoG * Math.sqrt(2 * g * buoy * TgK / TaK) * (room.dh - z) ** 1.5;
+}
+function smokeFilling(fire, room, m, tend, dt = 0.25) {
+  const A = roomGeometry(room).floor;
+  let mass = 0;
+  const z = [room.h];
+  for (let step = 1, t = dt; t <= tend + 1e-9; step++, t = step * dt) {
+    const Q = effectiveHRR(t, fire, room);
+    const TgK = layerTemp(t, Q, room, m) + 273.15, rhoG = 353 / TgK;
+    const zNow = Math.max(0, room.h - mass / (rhoG * A));
+    mass = Math.max(0, mass + (plumeEntrainment(Q, zNow) - doorOutflow(room, zNow, TgK)) * dt);
+    if (Math.abs(t - Math.round(t)) < 1e-6) z[Math.round(t)] = Math.max(0, room.h - mass / (rhoG * A));
+  }
+  return z;  // z[t] for whole seconds, m
+}
+
+// Step 4: required safe egress time
+function rset(o) { return o.det + o.pre + o.dist / o.speed; }
+
+/* ===================== State & inputs ===================== */
+const state = {
+  growth: "fast", qmax: 2500, tend: 600,
+  room: { l: 4.5, w: 3.5, h: 2.6, dw: 0.9, dh: 2.1, mat: 0, thk: 16 },
+  occ: { det: 30, pre: 30, dist: 4, speed: 1.2 },
+  sceneT: 120
+};
+const $ = id => document.getElementById(id);
+const fmtT = s => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+
+GROWTH.forEach(g => {
+  const b = document.createElement("button");
+  b.type = "button"; b.id = "g-" + g.id;
+  b.innerHTML = `${g.name}<span>α = ${g.alpha.toFixed(4)}</span>`;
+  b.onclick = () => { state.growth = g.id; render(); };
+  $("growth").appendChild(b);
+});
+FUELS.forEach((f, i) => $("fuel").add(new Option(f.q ? `${f.name} (≈${f.q.toLocaleString()} kW)` : f.name, i)));
+PRESETS.forEach((p, i) => $("preset").add(new Option(p.name, i)));
+MATERIALS.forEach((m, i) => $("mat").add(new Option(m.name, i)));
+OCCUPANTS.forEach((o, i) => $("occ").add(new Option(o.name, i)));
+$("fuel").value = 3; $("preset").value = 0; $("occ").value = 0;
+
+$("fuel").onchange = e => { const f = FUELS[e.target.value]; if (f.q) state.qmax = f.q; render(); };
+$("qmax").oninput = e => { state.qmax = +e.target.value; $("fuel").value = 5; render(); };
+$("tend").oninput = e => { state.tend = +e.target.value; state.sceneT = Math.min(state.sceneT, state.tend); render(); };
+$("preset").onchange = e => {
+  const p = PRESETS[e.target.value]; if (p.custom) return;
+  Object.assign(state.room, { l: p.l, w: p.w, h: p.h, dw: p.dw, dh: p.dh, mat: p.mat, thk: MATERIALS[p.mat].thk });
+  syncInputs(); render();
+};
+$("mat").onchange = e => { state.room.mat = +e.target.value; state.room.thk = MATERIALS[state.room.mat].thk; $("thk").value = state.room.thk; $("preset").value = 5; render(); };
+$("occ").onchange = e => { const o = OCCUPANTS[e.target.value]; if (o.custom) return; Object.assign(state.occ, { det: o.det, pre: o.pre, dist: o.dist, speed: o.speed }); syncInputs(); render(); };
+const ROOM_KEYS = { rl: "l", rw: "w", rh: "h", dw: "dw", dh: "dh", thk: "thk" };
+const OCC_KEYS = { tdet: "det", tpre: "pre", dist: "dist", speed: "speed" };
+Object.entries(ROOM_KEYS).forEach(([id, key]) => $(id).addEventListener("input", e => {
+  const v = parseFloat(e.target.value);
+  if (isFinite(v) && v > 0) { state.room[key] = v; $("preset").value = 5; render(); }
+}));
+Object.entries(OCC_KEYS).forEach(([id, key]) => $(id).addEventListener("input", e => {
+  const v = parseFloat(e.target.value);
+  if (isFinite(v) && v >= 0 && !(key === "speed" && v === 0)) { state.occ[key] = v; $("occ").value = 4; render(); }
+}));
+function syncInputs() {
+  Object.entries(ROOM_KEYS).forEach(([id, key]) => $(id).value = state.room[key]);
+  Object.entries(OCC_KEYS).forEach(([id, key]) => $(id).value = state.occ[key]);
+  $("mat").value = state.room.mat;
+}
+syncInputs();
+$("ref-table").innerHTML = GROWTH.map(g => `<tr><td>${g.name}</td><td class="n">${g.tg}</td><td class="n">${g.alpha.toFixed(4)}</td><td>${g.fuel}</td></tr>`).join("");
+$("mat-table").innerHTML = MATERIALS.map(m => `<tr><td>${m.name}</td><td class="n">${m.k}</td><td class="n">${m.rho}</td><td class="n">${m.c}</td></tr>`).join("");
+
+/* ===================== Simulation ===================== */
+let sim = null;
+function simulate() {
+  const g = GROWTH.find(x => x.id === state.growth), r = state.room, m = MATERIALS[r.mat];
+  const fire = { alpha: g.alpha, qmax: state.qmax }, tend = state.tend;
+  const Q = [], T = [];
+  for (let t = 0; t <= tend; t++) { Q[t] = effectiveHRR(t, fire, r); T[t] = layerTemp(t, Q[t], r, m); }
+  const z = smokeFilling(fire, r, m, tend);
+  const first = (arr, test) => { for (let t = 1; t < arr.length; t++) if (test(arr[t], t)) return t; return null; };
+  const qv = ventLimit(r), th = flashoverThresholds(r);
+  const tMQH = first(T, v => v >= T_FO_MQH);
+  const fo = [
+    { name: "Babrauskas", q: th.babrauskas, t: first(Q, v => v >= th.babrauskas) },
+    { name: "Thomas", q: th.thomas, t: first(Q, v => v >= th.thomas) },
+    { name: "MQH (smoke at 520 °C)", q: tMQH ? Q[tMQH] : null, t: tMQH }
+  ];
+  const tLayer = first(z, v => v <= HEAD_HEIGHT), tHot = first(T, v => v >= T_RADIANT);
+  let aset = null, asetWhy = "";
+  if (tLayer !== null && (tHot === null || tLayer <= tHot)) { aset = tLayer; asetWhy = "Smoke reaches head height (1.8 m)"; }
+  else if (tHot !== null) { aset = tHot; asetWhy = "Smoke layer reaches 200 °C"; }
+  return {
+    g, r, m, fire, tend, Q, T, z, qv, fo, aset, asetWhy, rset: rset(state.occ),
+    geo: roomGeometry(r), tpen: penetrationTime(m, r.thk / 1000),
+    tPeak: timeToReach(state.qmax, g.alpha), tVent: state.qmax > qv ? timeToReach(qv, g.alpha) : null,
+    t200: tHot, t600: first(T, v => v >= 600), tDoor: first(z, v => v <= r.dh), t18: tLayer
+  };
+}
+const at = (arr, t) => { const i = Math.floor(t), f = t - i; return i + 1 < arr.length ? arr[i] * (1 - f) + arr[i + 1] * f : arr[arr.length - 1]; };
+
+/* ===================== Charts ===================== */
+const W = 720, H = 300, M = { l: 62, r: 18, t: 14, b: 42 };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+function niceStep(max, n) {
+  const raw = max / n, p = 10 ** Math.floor(Math.log10(raw)), f = raw / p;
+  return (f < 1.5 ? 1 : f < 3 ? 2 : f < 7 ? 5 : 10) * p;
+}
+const X = t => M.l + (t / state.tend) * (W - M.l - M.r);
+function axes(ytop, ystep, unit) {
+  const Y = v => H - M.b - (v / ytop) * (H - M.t - M.b);
+  const grid = css("--grid"), line = css("--line");
+  let s = "";
+  for (let v = 0; v <= ytop + 1e-6; v += ystep) s += `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(v)}" y2="${Y(v)}" stroke="${grid}"/><text x="${M.l - 8}" y="${Y(v) + 4}" text-anchor="end">${+v.toFixed(2)}</text>`;
+  const xstep = niceStep(state.tend, 6);
+  for (let t = 0; t <= state.tend + 1e-6; t += xstep) s += `<text x="${X(t)}" y="${H - M.b + 18}" text-anchor="middle">${t}</text>`;
+  s += `<line x1="${M.l}" x2="${W - M.r}" y1="${Y(0)}" y2="${Y(0)}" stroke="${line}" stroke-width="1.5"/>`;
+  s += `<text x="${(M.l + W - M.r) / 2}" y="${H - 6}" text-anchor="middle">Time since ignition (s)</text>`;
+  s += `<text x="12" y="${M.t + 8}">${unit}</text>`;
+  return { s, Y };
+}
+function pathOf(arr, Y, clampTop) {
+  let d = "";
+  for (let t = 0; t < arr.length; t++) d += (t ? "L" : "M") + X(t).toFixed(1) + " " + Y(Math.min(arr[t], clampTop)).toFixed(1);
+  return d;
+}
+function hline(Y, v, color, label, dash = "6 4", anchorRight = false) {
+  const y = Y(v);
+  return `<line x1="${M.l}" x2="${W - M.r}" y1="${y}" y2="${y}" stroke="${color}" stroke-width="1.2" stroke-dasharray="${dash}"/>` +
+    `<text x="${anchorRight ? W - M.r - 6 : M.l + 8}" y="${y - 6}" text-anchor="${anchorRight ? "end" : "start"}" style="fill:${color}">${label}</text>`;
+}
+function vline(t, color, label, Y0, row = 0) {
+  if (t === null || t > state.tend) return "";
+  const x = X(t), right = x < W - 150;
+  return `<line x1="${x}" x2="${x}" y1="${M.t}" y2="${Y0}" stroke="${color}" stroke-width="2"/>` +
+    `<text x="${right ? x + 6 : x - 6}" y="${M.t + 12 + row * 15}" text-anchor="${right ? "start" : "end"}" style="fill:${color}">${label}</text>`;
+}
+function cursorMarkup(c) {
+  return `<line class="cur" x1="0" x2="0" y1="${M.t}" y2="${H - M.b}" stroke="${css("--muted")}" opacity="0"/><circle class="cdot" r="4" fill="${c}" opacity="0"/><rect class="hit" x="${M.l}" y="${M.t}" width="${W - M.l - M.r}" height="${H - M.t - M.b}" fill="transparent"/>`;
+}
+const charts = {};
+
+function drawCharts() {
+  const s0 = sim, c = { ember: css("--ember"), steel: css("--steel"), heat: css("--heat"), warn: css("--warn"), cool: css("--cool"), smoke: css("--smoke") };
+
+  // HRR
+  {
+    const foQs = s0.fo.map(f => f.q).filter(q => q);
+    const ymax = Math.max(state.qmax, Math.min(s0.qv, state.qmax * 1.6), ...foQs) * 1.12;
+    const ystep = niceStep(ymax, 5), ytop = Math.ceil(ymax / ystep) * ystep;
+    const { s: base, Y } = axes(ytop, ystep, "kW");
+    let s = base;
+    if (foQs.length) {
+      const lo = Math.min(...foQs), hi = Math.max(...foQs);
+      s += `<rect x="${M.l}" y="${Y(hi)}" width="${W - M.l - M.r}" height="${Math.max(2, Y(lo) - Y(hi))}" fill="${c.heat}" opacity="0.13"/>`;
+      s += `<text x="${M.l + 8}" y="${Y(hi) - 6}" style="fill:${c.heat}">Flashover range</text>`;
+    }
+    if (s0.qv <= ytop) s += hline(Y, s0.qv, c.cool, `Air supply limit ${Math.round(s0.qv).toLocaleString()} kW`, "6 4", true);
+    GROWTH.filter(x => x.id !== s0.g.id).forEach(x => {
+      let d = "";
+      for (let i = 0; i <= 200; i++) { const t = state.tend * i / 200, q = x.alpha * t * t; if (q > ytop) break; d += (i ? "L" : "M") + X(t).toFixed(1) + " " + Y(q).toFixed(1); }
+      s += `<path d="${d}" fill="none" stroke="${c.steel}" stroke-width="1.5" stroke-dasharray="5 4"/>`;
+    });
+    const d = pathOf(s0.Q, Y, ytop);
+    s += `<path d="${d}L${X(state.tend)} ${Y(0)}L${X(0)} ${Y(0)}Z" fill="${c.ember}" opacity="0.12"/>`;
+    s += `<path d="${d}" fill="none" stroke="${c.ember}" stroke-width="3" stroke-linejoin="round"/>`;
+    s += cursorMarkup(c.ember);
+    $("chart-q").innerHTML = s;
+    charts.q = { Y, val: t => at(s0.Q, t), fmt: (t, v) => `t = ${Math.round(t)} s · Q = ${Math.round(v).toLocaleString()} kW` };
+  }
+  // Temperature
+  {
+    const tmax = Math.max(...s0.T);
+    const ymax = Math.max(tmax * 1.08, 700), ystep = niceStep(ymax, 5), ytop = Math.ceil(ymax / ystep) * ystep;
+    const { s: base, Y } = axes(ytop, ystep, "°C");
+    let s = base;
+    s += `<rect x="${M.l}" y="${M.t}" width="${W - M.l - M.r}" height="${Y(600) - M.t}" fill="${c.heat}" opacity="0.07"/>`;
+    s += hline(Y, 200, c.warn, "200 °C · painful radiant heat below");
+    s += hline(Y, 600, c.heat, "600 °C · flashover likely");
+    if (s0.tpen < state.tend) s += `<line x1="${X(s0.tpen)}" x2="${X(s0.tpen)}" y1="${M.t}" y2="${Y(0)}" stroke="${c.steel}" stroke-dasharray="2 4"/><text x="${X(s0.tpen) - 6}" y="${Y(0) - 8}" text-anchor="end">t<tspan dy="3" font-size="9">p</tspan></text>`;
+    let solid = "", dotted = "", prev = null;
+    for (let t = 0; t < s0.T.length; t++) {
+      const pt = X(t).toFixed(1) + " " + Y(Math.min(s0.T[t], ytop)).toFixed(1), above = s0.T[t] > 600;
+      if (prev === null) solid = "M" + pt;
+      else if (above !== prev) { if (above) { solid += "L" + pt; dotted += "M" + pt; } else { dotted += "L" + pt; solid += "M" + pt; } }
+      else if (above) dotted += "L" + pt; else solid += "L" + pt;
+      prev = above;
+    }
+    s += `<path d="${solid}" fill="none" stroke="${c.heat}" stroke-width="3" stroke-linejoin="round"/>`;
+    if (dotted) s += `<path d="${dotted}" fill="none" stroke="${c.heat}" stroke-width="3" stroke-dasharray="1 5" stroke-linecap="round"/>`;
+    s += cursorMarkup(c.heat);
+    $("chart-t").innerHTML = s;
+    charts.t = { Y, val: t => at(s0.T, t), fmt: (t, v) => `t = ${Math.round(t)} s · T = ${Math.round(v)} °C` };
+  }
+  // Layer height
+  {
+    const ytop = Math.ceil(s0.r.h * 2) / 2, ystep = ytop <= 3 ? 0.5 : 1;
+    const { s: base, Y } = axes(ytop, ystep, "m");
+    let s = base;
+    s += `<rect x="${M.l}" y="${Y(HEAD_HEIGHT)}" width="${W - M.l - M.r}" height="${Y(0) - Y(HEAD_HEIGHT)}" fill="${c.cool}" opacity="0.05"/>`;
+    s += hline(Y, HEAD_HEIGHT, c.warn, "1.8 m · head height", "6 4", true);
+    if (Math.abs(s0.r.dh - HEAD_HEIGHT) > 0.12 && s0.r.dh < ytop) s += hline(Y, s0.r.dh, c.steel, "Top of door", "3 4", true);
+    const d = pathOf(s0.z, Y, ytop);
+    s += `<path d="M${X(0)} ${Y(ytop)}${d.replace("M", "L")}L${X(state.tend)} ${Y(ytop)}Z" fill="${c.smoke}" opacity="0.22"/>`;
+    s += `<path d="${d}" fill="none" stroke="${c.smoke}" stroke-width="3" stroke-linejoin="round"/>`;
+    const rowA = s0.rset !== null && s0.aset !== null && Math.abs(X(s0.rset) - X(s0.aset)) < 120 ? 1 : 0;
+    s += vline(s0.aset, c.heat, `ASET ${s0.aset} s`, Y(0), 0);
+    s += vline(s0.rset, c.cool, `RSET ${Math.round(s0.rset)} s`, Y(0), rowA);
+    s += cursorMarkup(c.smoke);
+    $("chart-z").innerHTML = s;
+    charts.z = { Y, val: t => at(s0.z, t), fmt: (t, v) => `t = ${Math.round(t)} s · smoke base ${v.toFixed(2)} m` };
+  }
+  bindHover();
+}
+
+function bindHover() {
+  const ids = [["chart-q", "tip-q", "q"], ["chart-t", "tip-t", "t"], ["chart-z", "tip-z", "z"]];
+  const show = t => {
+    ids.forEach(([sid, tid, k]) => {
+      const svg = $(sid), tip = $(tid), ch = charts[k], v = ch.val(t), rect = svg.getBoundingClientRect();
+      const yv = Math.max(M.t, ch.Y(v));
+      const cur = svg.querySelector(".cur"), dot = svg.querySelector(".cdot");
+      cur.setAttribute("x1", X(t)); cur.setAttribute("x2", X(t)); cur.setAttribute("opacity", 0.6);
+      dot.setAttribute("cx", X(t)); dot.setAttribute("cy", yv); dot.setAttribute("opacity", 1);
+      tip.hidden = false; tip.textContent = ch.fmt(t, v);
+      tip.style.left = Math.min(Math.max(X(t) / W * rect.width, 100), rect.width - 100) + "px";
+      tip.style.top = (yv / H * rect.height) + "px";
+    });
+    state.sceneT = Math.round(t); drawScene();
+  };
+  const hide = () => ids.forEach(([sid, tid]) => {
+    $(tid).hidden = true;
+    $(sid).querySelector(".cur").setAttribute("opacity", 0);
+    $(sid).querySelector(".cdot").setAttribute("opacity", 0);
+  });
+  ids.forEach(([sid]) => {
+    const svg = $(sid), hit = svg.querySelector(".hit");
+    hit.addEventListener("pointermove", ev => {
+      stopPlay();
+      const r = svg.getBoundingClientRect(), px = (ev.clientX - r.left) * W / r.width;
+      show(Math.max(0, Math.min(state.tend, (px - M.l) / (W - M.l - M.r) * state.tend)));
+    });
+    hit.addEventListener("pointerleave", hide);
+  });
+}
+
+/* ===================== Room scene ===================== */
+function hexToRgb(h) { h = h.replace("#", ""); if (h.length === 3) h = h.split("").map(x => x + x).join(""); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function mix(a, b, f) { const A = hexToRgb(a), B = hexToRgb(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * f)).join(",")})`; }
+
+function drawScene() {
+  if (!sim) return;
+  const s0 = sim, r = s0.r, t = Math.min(state.sceneT, state.tend);
+  const Q = at(s0.Q, t), T = at(s0.T, t), z = at(s0.z, t);
+  const SW = 720, SH = 270, floorY = 232, padX = 70;
+  const sc = Math.min((SW - 2 * padX - 60) / r.l, 190 / r.h);
+  const roomW = r.l * sc, x0 = (SW - roomW) / 2 - 20, x1 = x0 + roomW, ceilY = floorY - r.h * sc;
+  const ink = css("--ink"), muted = css("--muted"), heat = css("--heat"), ember = css("--ember"), smoke = css("--smoke"), cool = css("--cool"), safe = css("--safe"), panel = css("--panel");
+  const f = Math.max(0, Math.min(1, (T - T_AMB) / 600));
+  const layerColor = mix(smoke, heat, f), layerOp = 0.35 + 0.5 * f;
+  const zY = floorY - z * sc, doorTopY = floorY - r.dh * sc;
+  let s = "";
+  // smoke layer
+  s += `<rect x="${x0}" y="${ceilY}" width="${roomW}" height="${Math.max(0, zY - ceilY)}" fill="${layerColor}" opacity="${layerOp.toFixed(2)}"/>`;
+  // smoke leaving through door
+  if (z < r.dh && T > T_AMB + 5) s += `<path d="M${x1} ${doorTopY} L${x1 + 46} ${doorTopY - 10} L${x1 + 46} ${Math.min(zY, floorY) - 4} L${x1} ${Math.min(zY, floorY)} Z" fill="${layerColor}" opacity="${(layerOp * 0.5).toFixed(2)}"/>`;
+  // walls, ceiling, floor
+  s += `<path d="M${x1} ${doorTopY} L${x1} ${ceilY} L${x0} ${ceilY} L${x0} ${floorY} L${x1 + 60} ${floorY}" fill="none" stroke="${ink}" stroke-width="4" stroke-linejoin="round"/>`;
+  s += `<line x1="${x0 - 40}" y1="${floorY}" x2="${x0}" y2="${floorY}" stroke="${ink}" stroke-width="4"/>`;
+  // head-height line
+  s += `<line x1="${x0}" x2="${x1}" y1="${floorY - HEAD_HEIGHT * sc}" y2="${floorY - HEAD_HEIGHT * sc}" stroke="${muted}" stroke-dasharray="3 5"/>`;
+  s += `<text x="${x0 - 8}" y="${floorY - HEAD_HEIGHT * sc + 4}" text-anchor="end">1.8 m</text>`;
+  s += `<text x="${x0 - 8}" y="${ceilY + 4}" text-anchor="end">${r.h} m</text>`;
+  // fire
+  const fx = x0 + roomW * 0.28, fsz = Q > 0 ? 8 + 40 * Math.sqrt(Math.min(1, Q / 3000)) : 0;
+  if (fsz > 0) {
+    s += `<path d="M${fx - fsz * 0.6} ${floorY} Q${fx - fsz * 0.5} ${floorY - fsz * 0.9} ${fx} ${floorY - fsz * 1.5} Q${fx + fsz * 0.5} ${floorY - fsz * 0.9} ${fx + fsz * 0.6} ${floorY} Z" fill="${ember}"/>`;
+    s += `<path d="M${fx - fsz * 0.3} ${floorY} Q${fx - fsz * 0.2} ${floorY - fsz * 0.5} ${fx} ${floorY - fsz * 0.85} Q${fx + fsz * 0.2} ${floorY - fsz * 0.5} ${fx + fsz * 0.3} ${floorY} Z" fill="${css("--warn")}"/>`;
+    s += `<rect x="${fx - fsz * 0.8}" y="${floorY - 6}" width="${fsz * 1.6}" height="6" fill="${muted}"/>`;
+  }
+  // occupant
+  const o = state.occ, startMove = o.det + o.pre, walked = Math.max(0, (t - startMove) * o.speed), remaining = Math.max(0, o.dist - walked);
+  const out = t >= s0.rset;
+  const pxPerM = sc, personH = 1.75 * sc;
+  const px = out ? x1 + 36 : Math.max(x0 + 12, x1 - 14 - remaining * pxPerM);
+  const untenable = s0.aset !== null && t >= s0.aset;
+  const pc = out ? safe : untenable ? heat : cool;
+  s += `<circle cx="${px}" cy="${floorY - personH + personH * 0.09}" r="${personH * 0.09}" fill="${pc}"/>`;
+  s += `<rect x="${px - personH * 0.08}" y="${floorY - personH * 0.8}" width="${personH * 0.16}" height="${personH * 0.8}" rx="${personH * 0.06}" fill="${pc}"/>`;
+  // status text
+  const status = out ? "Occupant is out" : t < o.det ? "Alarm not yet sounding" : t < startMove ? "Alarm sounding, occupant reacting" : "Occupant walking to door";
+  s += `<text x="${SW - 12}" y="22" text-anchor="end" style="fill:${ink};font-size:13px">t = ${Math.round(t)} s</text>`;
+  s += `<text x="${SW - 12}" y="40" text-anchor="end">Fire ${Math.round(Q).toLocaleString()} kW · Smoke ${Math.round(T)} °C</text>`;
+  s += `<text x="${SW - 12}" y="56" text-anchor="end">Smoke base ${z.toFixed(2)} m</text>`;
+  s += `<text x="${SW - 12}" y="72" text-anchor="end" style="fill:${pc}">${status}</text>`;
+  if (untenable && !out) s += `<text x="${SW - 12}" y="88" text-anchor="end" style="fill:${heat}">Room untenable</text>`;
+  $("scene").innerHTML = s;
+  $("scene-t").max = state.tend; $("scene-t").value = Math.round(t);
+  $("scene-val").textContent = `${Math.round(t)} s`;
+}
+
+let playTimer = null;
+function stopPlay() { if (playTimer) { cancelAnimationFrame(playTimer); playTimer = null; $("play").textContent = "Play"; } }
+$("play").onclick = () => {
+  if (playTimer) { stopPlay(); return; }
+  if (state.sceneT >= state.tend) state.sceneT = 0;
+  $("play").textContent = "Pause";
+  let last = performance.now();
+  const rate = state.tend / 12;  // whole run in ~12 s
+  const tick = now => {
+    state.sceneT = Math.min(state.tend, state.sceneT + (now - last) / 1000 * rate); last = now;
+    drawScene();
+    if (state.sceneT >= state.tend) { stopPlay(); return; }
+    playTimer = requestAnimationFrame(tick);
+  };
+  playTimer = requestAnimationFrame(tick);
+};
+$("scene-t").addEventListener("input", e => { stopPlay(); state.sceneT = +e.target.value; drawScene(); });
+
+/* ===================== Render ===================== */
+const tOr = (t, more = "not reached") => t !== null && t !== undefined ? `${Math.round(t)}<small>s</small>` : `—<small>${more}</small>`;
+function render() {
+  const g = GROWTH.find(x => x.id === state.growth);
+  GROWTH.forEach(x => $("g-" + x.id).setAttribute("aria-pressed", x.id === g.id));
+  $("growth-hint").textContent = `Reaches 1,055 kW in ${g.tg} s. Typical fuel: ${g.fuel.toLowerCase()}.`;
+  $("qmax").value = state.qmax; $("tend").value = state.tend;
+  $("qmax-val").textContent = `${state.qmax.toLocaleString()} kW`;
+  $("tend-val").textContent = `${state.tend} s (${fmtT(state.tend)} min)`;
+  const r = state.room;
+  const err = r.dw > Math.max(r.l, r.w) ? "The door is wider than every wall. Make it narrower than the room." :
+              r.dh > r.h ? "The door is taller than the ceiling. Lower the door height." : "";
+  $("room-err").hidden = !err; $("room-err").textContent = err;
+
+  sim = simulate();
+  const s0 = sim;
+
+  // Verdict
+  const reached = s0.fo.filter(f => f.t !== null).map(f => f.t);
+  if (reached.length) {
+    const lo = Math.min(...reached), hi = Math.max(...reached);
+    $("v-fo").innerHTML = lo === hi ? `${lo}<small>s</small>` : `${lo}–${hi}<small>s</small>`;
+    $("v-fo").className = "v alarm";
+    $("v-fo-s").textContent = `${reached.length} of 3 methods predict it`;
+  } else {
+    $("v-fo").innerHTML = `None`; $("v-fo").className = "v";
+    $("v-fo-s").textContent = "The fire stays below every flashover threshold";
+  }
+  $("v-aset").innerHTML = tOr(s0.aset, `not within ${state.tend} s`);
+  $("v-aset-s").textContent = s0.aset !== null ? s0.asetWhy : "Smoke stays above head height and below 200 °C";
+  $("v-rset").innerHTML = `${Math.round(s0.rset)}<small>s</small>`;
+  $("v-rset-s").textContent = `${state.occ.det} detect + ${state.occ.pre} react + ${Math.round(state.occ.dist / state.occ.speed)} walk`;
+  const banner = $("banner");
+  if (s0.aset === null) {
+    $("v-margin").innerHTML = `>${Math.round(state.tend - s0.rset)}<small>s</small>`; $("v-margin").className = "v";
+    banner.className = "banner ok";
+    banner.innerHTML = `<b>Occupants get out.</b> The room stays tenable for the whole ${state.tend} s simulated, and escape takes ${Math.round(s0.rset)} s.`;
+  } else {
+    const margin = s0.aset - s0.rset;
+    $("v-margin").innerHTML = `${margin >= 0 ? "+" : "−"}${Math.abs(Math.round(margin))}<small>s</small>`;
+    $("v-margin").className = "v " + (margin >= 0 ? "" : "alarm");
+    banner.className = "banner " + (margin >= 0 ? "ok" : "bad");
+    banner.innerHTML = margin >= 0
+      ? `<b>Occupants get out with ${Math.round(margin)} s to spare.</b> Real designs add a safety factor, so a thin margin would still need improvement.`
+      : `<b>The room becomes untenable ${Math.abs(Math.round(margin))} s before the occupant is out.</b> Faster detection, a sprinkler, a slower-growing fuel or a larger room would all help. Try changing one.`;
+  }
+
+  // Step 1 & 3 readouts
+  $("r-alpha").innerHTML = `${g.alpha.toFixed(4)}<small>kW/s²</small>`;
+  const capT = s0.tVent !== null ? Math.min(s0.tPeak, s0.tVent) : s0.tPeak;
+  $("r-tp").innerHTML = capT <= state.tend ? `${Math.round(capT)}<small>s</small>` : `>${state.tend}<small>s</small>`;
+  $("r-vent").innerHTML = `${Math.round(s0.qv).toLocaleString()}<small>kW</small>`;
+  $("r-vent").classList.toggle("alarm", s0.tVent !== null && s0.tVent <= state.tend);
+  let E = 0; for (let t = 1; t < s0.Q.length; t++) E += (s0.Q[t] + s0.Q[t - 1]) / 2;
+  $("r-e").innerHTML = `${Math.round(E / 1000).toLocaleString()}<small>MJ</small>`;
+  $("fo-rows").innerHTML = s0.fo.map(f => `<tr><td>${f.name}</td><td class="n">${f.q ? Math.round(f.q).toLocaleString() + " kW" : "—"}</td><td class="n">${f.t !== null ? f.t + " s" : "Not reached"}</td></tr>`).join("")
+    + `<tr><td>Fire limited by air supply</td><td class="n">${Math.round(s0.qv).toLocaleString()} kW</td><td class="n">${s0.tVent !== null && s0.tVent <= state.tend ? Math.round(s0.tVent) + " s" : "Not reached"}</td></tr>`;
+
+  // Step 2 readouts
+  $("r-of").innerHTML = `${s0.geo.openingFactor.toFixed(2)}<small>m<sup>5/2</sup></small>`;
+  $("r-tpen").innerHTML = `${Math.round(s0.tpen).toLocaleString()}<small>s</small>`;
+  $("r-t200").innerHTML = tOr(s0.t200); $("r-t200").classList.toggle("alarm", s0.t200 !== null);
+  $("r-t600").innerHTML = tOr(s0.t600); $("r-t600").classList.toggle("alarm", s0.t600 !== null);
+
+  // Step 4 readouts
+  $("r-area").innerHTML = `${s0.geo.floor.toFixed(1)}<small>m²</small>`;
+  $("r-tdoor").innerHTML = tOr(s0.tDoor);
+  $("r-t18").innerHTML = tOr(s0.t18); $("r-t18").classList.toggle("alarm", s0.t18 !== null);
+  $("r-zend").innerHTML = `${s0.z[s0.z.length - 1].toFixed(2)}<small>m</small>`;
+
+  drawCharts();
+  drawScene();
+}
+
+render();
+try { matchMedia("(prefers-color-scheme: dark)").addEventListener("change", render); } catch (e) {}
+new MutationObserver(render).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+</script>

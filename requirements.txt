@@ -1,0 +1,6 @@
+# Packages this project needs. Install with:  pip install -r requirements.txt
+# Versions are pinned so the app behaves the same on every computer
+# (and on Streamlit Community Cloud) as it did when it was tested.
+streamlit==1.67.0   # web app front end
+plotly==7.1.0       # interactive charts
+pytest==9.2.0       # runs the tests in tests/
