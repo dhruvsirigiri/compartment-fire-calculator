@@ -8,6 +8,8 @@ from fire_model.egress import (
     REASON_SMOKE_LOW,
     Occupant,
     aset,
+    distance_left_to_walk,
+    occupant_status,
     rset,
     safety_margin,
 )
@@ -75,3 +77,17 @@ def test_safety_margin():
     assert safety_margin(100, 63.3) == pytest.approx(36.7)
     assert safety_margin(29, 63.3) == pytest.approx(-34.3)  # untenable before escape
     assert safety_margin(None, 63.3) is None
+
+
+# ---- Where the occupant is (used by the 3D room view) ----
+
+def test_occupant_timeline():
+    person = OCCUPANT_PRESETS["Awake, smoke alarm in room"]  # 30 s, 30 s, 4 m at 1.2 m/s
+    assert occupant_status(10, person) == "Alarm not yet sounding"
+    assert occupant_status(45, person) == "Alarm sounding, occupant reacting"
+    assert occupant_status(62, person) == "Occupant walking to door"
+    assert occupant_status(64, person) == "Occupant is out"  # RSET = 63.3 s
+
+    assert distance_left_to_walk(0, person) == 4  # hasn't moved yet
+    assert distance_left_to_walk(61, person) == pytest.approx(4 - 1.2)  # 1 s of walking
+    assert distance_left_to_walk(rset(person), person) == pytest.approx(0)

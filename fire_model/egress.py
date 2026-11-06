@@ -58,6 +58,28 @@ def rset(occupant):
     return occupant.detection_time + occupant.reaction_time + walking_time(occupant)
 
 
+def distance_left_to_walk(t, occupant):
+    """How far (m) the occupant still has to walk at time t (s).
+
+    They start walking once the alarm has sounded and they have reacted
+    (t = detection + reaction), then walk straight to the door at constant speed.
+    """
+    start_walking = occupant.detection_time + occupant.reaction_time
+    walked = max(0.0, (t - start_walking) * occupant.walk_speed)
+    return max(0.0, occupant.walk_distance - walked)
+
+
+def occupant_status(t, occupant):
+    """What the occupant is doing at time t (s), in words."""
+    if t >= rset(occupant):
+        return "Occupant is out"
+    if t < occupant.detection_time:
+        return "Alarm not yet sounding"
+    if t < occupant.detection_time + occupant.reaction_time:
+        return "Alarm sounding, occupant reacting"
+    return "Occupant walking to door"
+
+
 def aset(layer_heights, layer_temps):
     """Available safe egress time.
 

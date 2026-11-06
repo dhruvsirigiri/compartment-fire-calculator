@@ -27,6 +27,7 @@ from fire_model.growth import FUEL_PEAK_HRR, GROWTH_TIMES, REFERENCE_HRR, growth
 from fire_model.layer_temp import LININGS, MQH_UPPER_LIMIT
 from fire_model.room import Room, room_problems
 from fire_model.scenario import run_scenario
+from room_view import room_3d_figure
 
 st.set_page_config(page_title="Compartment Fire Calculator", page_icon="🔥", layout="wide")
 
@@ -67,6 +68,7 @@ PALETTES = {
         reference="#8A94A6",  # gray reference curves and threshold lines
         text="#5A6475",  # chart labels (text never uses the data colors)
         surface="#FFFFFF",  # page background, behind chart labels
+        safe="#15803D",  # 3D view: occupant is out (always shown with a text label)
     ),
     "dark": dict(
         fire="#E8590C",
@@ -77,6 +79,7 @@ PALETTES = {
         reference="#6B7586",
         text="#9AA3B2",
         surface="#11151C",
+        safe="#4ADE80",
     ),
 }
 
@@ -575,6 +578,27 @@ def readouts(items):
 
 
 with st.container(border=True):
+    st.subheader("What it looks like inside")
+    st.caption("STEP 4 · 3D VIEW OF THE TWO-ZONE MODEL")
+    st.markdown(
+        "It opens at the moment the room becomes untenable. Press **Play**, or drag the slider, to "
+        "watch the fire grow, the smoke layer drop and heat up, and the occupant head for the door. "
+        "Drag the picture to rotate it."
+        if result.aset is not None else
+        "Press **Play**, or drag the slider, to watch the fire grow, the smoke layer drop and heat "
+        "up, and the occupant head for the door. Drag the picture to rotate it."
+    )
+    # Open at ASET if the room becomes untenable, otherwise at 2 minutes.
+    show(room_3d_figure(result, room, occupant, colors, start_time=result.aset or 120))
+    st.caption(
+        "This is a picture of this calculator's results, not a 3D fire simulation. A two-zone "
+        "model knows only how deep the smoke layer is and its one average temperature, so the "
+        "smoke is drawn as a flat, uniform slab: exactly what the model assumes. The fire's drawn "
+        "size grows with its heat release rate but is not a calculated flame height. Full 3D fire "
+        "simulation needs CFD software such as NIST's FDS."
+    )
+
+with st.container(border=True):
     st.subheader("Fire size over time")
     st.caption("STEPS 1 & 3 · HEAT RELEASE RATE")
     time_to_peak = (
@@ -620,6 +644,14 @@ with st.container(border=True):
         ("Height at end", f"{result.layer_height[-1]:.2f} m", f"Bottom of the smoke layer at t = {t_end} s"),
     ])
     show(height_chart())
+    if min(result.layer_height) < 0.05:  # the smoke reached (or nearly reached) the floor
+        st.caption(
+            "Why the line jitters near the floor: once the room is full of smoke, the plume still "
+            "brings in slightly more gas than the door can let out, so the model's layer keeps "
+            "trying to go below the floor. The height is held at 0, the plume briefly adds nothing, "
+            "the layer bounces back up a few centimetres, and the cycle repeats. Read it as smoke "
+            "all the way down to the floor."
+        )
 
 with st.expander("Show the numbers behind the charts"):
     step = 5 if t_end <= 300 else 10
@@ -784,7 +816,12 @@ with left.container(border=True):
         "- The smoke layer has one average temperature, from MQH. MQH was fitted to tests below "
         "about 600 °C, and the smoke filling model uses it outside its original purpose.\n"
         "- The door outflow ignores the neutral plane and the fresh air flowing in below it, so "
-        "late-time smoke layer heights near the floor are approximate.\n"
+        "late-time smoke layer heights near the floor are approximate. Once the room is full of "
+        "smoke the layer height jitters between about 0 and 0.1 m; read that as smoke down to "
+        "the floor.\n"
+        "- Heskestad's plume equation used here is meant for heights above the flame tip. When the "
+        "smoke layer is lower than the flames (a large fire with a low layer), it is used outside "
+        "that range.\n"
         "- Untenability is judged by layer height and temperature only, not by toxic gases or "
         "visibility.\n"
         "- The occupant walks straight to the door at a steady speed."

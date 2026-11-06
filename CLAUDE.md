@@ -77,7 +77,7 @@ RSET for "awake with alarm" = 63.3 s.
 
 ## Known limitations (keep listed in the app)
 
-Single room, single opening; fire at floor, never decays; no sprinklers; one average layer temperature from MQH (used outside its original purpose in the filling model); door outflow ignores the neutral plane and inflow below it, so late-time layer heights near the floor are approximate; tenability uses layer height and temperature only (no toxicity or visibility); occupant walks straight at constant speed.
+Single room, single opening; fire at floor, never decays; no sprinklers; one average layer temperature from MQH (used outside its original purpose in the filling model); door outflow ignores the neutral plane and inflow below it, so late-time layer heights near the floor are approximate (once the room is smoke-logged the plume still delivers slightly more mass than the door removes, so z chatters between 0 and ~0.1 m; the z ≈ 0.10 m check value at 300 s is a point on that chatter); Heskestad's plume equation is for heights above the flame tip, so it is used outside its range when the layer is below the flames; tenability uses layer height and temperature only (no toxicity or visibility); occupant walks straight at constant speed.
 
 ## Ideas for later (in rough priority order)
 1. Validate every step against NRC NUREG-1805 (Fire Dynamics Tools) example problems and document the comparison.

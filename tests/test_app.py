@@ -98,3 +98,8 @@ def test_door_taller_than_ceiling_is_caught(app):
 def test_occupant_preset_changes_rset(app):
     app.selectbox(key="occupant_preset").set_value("Asleep, smoke alarm in room").run()
     assert metric(app, "Everyone is out") == "154 s"  # 30 + 120 + 4 / 1.0
+
+
+def test_all_four_charts_are_drawn(app):
+    # 3D room view + heat release rate + temperature + smoke layer height
+    assert len(app.get("plotly_chart")) == 4
