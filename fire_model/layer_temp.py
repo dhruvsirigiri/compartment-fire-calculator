@@ -101,6 +101,16 @@ def mqh_layer_temperature(t, hrr, room, lining):
     return T_AMBIENT + temperature_rise
 
 
+def temperature_history(hrr_by_second, room, lining):
+    """MQH layer temperature (°C) at every whole second.
+
+    hrr_by_second[t] is the fire size (kW) at t seconds; the result has the same
+    length, with result[t] the layer temperature at t seconds.
+    """
+    # enumerate() gives each position (the time t) together with its value (Q).
+    return [mqh_layer_temperature(t, hrr, room, lining) for t, hrr in enumerate(hrr_by_second)]
+
+
 def is_within_mqh_range(temperature):
     """True if a layer temperature (°C) is inside the range MQH was fitted to."""
     return temperature <= MQH_UPPER_LIMIT

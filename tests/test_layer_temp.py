@@ -14,6 +14,7 @@ from fire_model.layer_temp import (
     T_AMBIENT,
     is_within_mqh_range,
     mqh_layer_temperature,
+    temperature_history,
     thermal_penetration_time,
     wall_heat_transfer_coefficient,
 )
@@ -90,3 +91,12 @@ def test_thicker_lining_takes_longer_to_heat_through():
 
 def test_room_is_at_ambient_before_ignition():
     assert mqh_layer_temperature(0, 0, BEDROOM, GYPSUM) == T_AMBIENT
+
+
+def test_temperature_history_lines_up_with_time():
+    # One fire size per second, t = 0 ... 150 s
+    hrr = [t_squared_hrr(t, ALPHA_FAST, SOFA) for t in range(151)]
+    temps = temperature_history(hrr, BEDROOM, GYPSUM)
+    assert len(temps) == len(hrr)
+    assert temps[0] == T_AMBIENT
+    assert temps[150] == pytest.approx(388, abs=0.5)  # same check value as above
