@@ -11,7 +11,9 @@ in fire dynamics, and the app explains each one.
 A first-year fire protection engineering project by **Dhruv Sirigiri**
 (B.S. Fire Protection Engineering, University of Maryland).
 
-**Live app:** *link coming soon*
+[![Open in Streamlit](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://compartment-fire-calculator.streamlit.app/)
+
+**Live app: https://compartment-fire-calculator.streamlit.app/**
 
 ![The Compartment Fire Calculator: inputs, verdict and 3D room view](docs/screenshot.png)
 
