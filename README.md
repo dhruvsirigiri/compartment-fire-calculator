@@ -183,7 +183,7 @@ Next step: validate each method against the worked example problems in NRC NUREG
 You need Python 3.10 or newer ([python.org](https://www.python.org/downloads/)).
 
 ```bash
-git clone https://github.com/YOUR-GITHUB-USERNAME/compartment-fire-calculator.git
+git clone https://github.com/dhruvsirigiri/compartment-fire-calculator.git
 cd compartment-fire-calculator
 python3 -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
