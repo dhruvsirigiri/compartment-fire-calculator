@@ -14,7 +14,11 @@ Dhruv is new to programming and to fire dynamics (currently in Calculus III). Wh
 
 ## Current state
 
-`index.html` is a working single-file prototype (HTML + vanilla JS, no build step). It is the reference implementation: the rebuilt app must reproduce its results (see "Check values" below). Open it in a browser to see the intended behavior and layout.
+The Python/Streamlit app is built and deployed at https://compartment-fire-calculator.streamlit.app/ (code: https://github.com/dhruvsirigiri/compartment-fire-calculator). Streamlit Community Cloud redeploys automatically when `main` is pushed.
+
+`index.html` is the original single-file prototype (HTML + vanilla JS). It is the reference implementation: with no sprinkler and no heat detector, the app must reproduce its results (see "Check values" below).
+
+Beyond the prototype the app has: sprinkler and heat detector activation; a metric / US customary unit switch (display only, the physics stays in SI); a 3D view (Heskestad flame height, plume, door spill, sprinkler spray, occupant); a "check the calculation by hand" section; and validation against the NUREG-1805 spreadsheets (`fire_model/validation.py`, `docs/VALIDATION.md`).
 
 ## Target architecture (recommended)
 
@@ -25,6 +29,8 @@ Dhruv is new to programming and to fire dynamics (currently in Calculus III). Wh
 - Git repository pushed to GitHub (public), with a clear commit history.
 
 Keep the physics independent of the UI so it can be tested and reused.
+
+As built: `fire_model/` also has `room.py` (geometry), `timeline.py` (first-time helpers), `scenario.py` (runs every step), `detection.py` (sprinklers and heat detectors) and `validation.py` (NUREG-1805 cases). The UI is split into `app.py` (inputs, verdict, layout), `charts.py`, `room_view.py` (3D), `worked_example.py`, `explanations.py` and `units.py`.
 
 ## The model
 
@@ -59,6 +65,15 @@ Ambient T_a = 20 °C. Head height for tenability = 1.8 m.
 - RSET = detection time + reaction (pre-movement) time + walk distance / walking speed.
 - Occupant presets: awake with alarm (30, 30, 4 m, 1.2 m/s); asleep with alarm (30, 120, 4 m, 1.0 m/s); awake no alarm (90, 60, 4 m, 1.2 m/s); needs help (30, 90, 4 m, 0.5 m/s).
 
+### Fire protection (added after the prototype; method and data from NUREG-1805 Supplement 1, Ch. 10)
+- Ceiling jet (Alpert 1972), total Q, H = room height (fire at floor), r = horizontal distance: T_jet − T_a = 16.9 Q^(2/3)/H^(5/3) for r/H ≤ 0.18, else 5.38 (Q/r)^(2/3)/H; u_jet = 0.96 (Q/H)^(1/3) for r/H ≤ 0.15, else 0.195 Q^(1/3) H^(1/2)/r^(5/6).
+- Device heating: dT_d/dt = √u_jet/RTI (T_jet − T_d), Euler dt = 0.25 s with Q_eff(t) (DETACT-QS). Steady-fire check: t_act = RTI/√u ln[(T_jet − T_a)/(T_jet − T_act)].
+- Sprinkler: when it activates, the fire is held at Q_eff(t_act) (equivalent to lowering the peak HRR). Heat detector: its activation time replaces the occupant's detection time; if it never activates, RSET is unknown.
+- Data: sprinkler RTI 34 / 42 / 130 / 235 (m·s)^½ for quick link / quick bulb / standard link / standard bulb (Madrzykowski 1995); generic ratings ordinary 165 °F, intermediate 212 °F, high 275 °F, extra high 350 °F, very extra high 450 °F (NFPA ASSH); heat detector RTI by rating and UL listed spacing from NFPA 72 Table B-3.2.5.1 (all as tabulated in the NUREG-1805 spreadsheet).
+
+### Flame height (3D view and the flame-tip check only)
+- Heskestad: L = 0.235 Q^(2/5) − 1.02 D (NUREG-1805 Ch. 3), clipped at 0. Burning diameter grows with the fire, D = D_full √(Q/Q_peak) (a t-squared fire is steady spread at constant HRR per unit area, so area ∝ Q). D_full is a user input (default 1.0 m, an assumption).
+
 ## Check values (the rebuilt model must match these)
 
 Fast fire (α = 0.0469), sofa peak 2500 kW, 16 mm gypsum.
@@ -75,22 +90,29 @@ Living room 7 × 6 × 2.4 m, door 1.8 × 2.1 m, slow fire, chair 750 kW: no flas
 
 RSET for "awake with alarm" = 63.3 s.
 
+## Validation against NUREG-1805
+
+`fire_model/validation.py` holds 33 comparisons with the NRC's NUREG-1805 Supplement 1 spreadsheets (copies in `docs/nureg-1805/`, inputs and answers with cell references); `tests/test_nureg1805.py` requires all to pass. Formulas agree to the NRC's printed precision; the full MQH chain is +0.12% (NRC rounds concrete k·ρ·c to 2.9); the 500 K MQH flashover criterion is +2.2% above the 610 closed form; DETACT-QS time stepping is within 0.3% of the steady-fire formula. NUREG-1805 does not cover this project's smoke-filling method. The report PDFs (ML13211A097/098) could not be downloaded automatically (NRC blocks automated access to /docs/); their worked examples are a possible addition.
+
 ## Known limitations (keep listed in the app)
 
-Single room, single opening; fire at floor, never decays; no sprinklers; one average layer temperature from MQH (used outside its original purpose in the filling model); door outflow ignores the neutral plane and inflow below it, so late-time layer heights near the floor are approximate (once the room is smoke-logged the plume still delivers slightly more mass than the door removes, so z chatters between 0 and ~0.1 m; the z ≈ 0.10 m check value at 300 s is a point on that chatter); Heskestad's plume equation is for heights above the flame tip, so it is used outside its range when the layer is below the flames; tenability uses layer height and temperature only (no toxicity or visibility); occupant walks straight at constant speed.
+Single room, single opening; fire at floor, never decays; a sprinkler only stops fire growth (no cooling or suppression); Alpert's correlations are for an unconfined ceiling, so in a small room activation tends to be predicted late; one average layer temperature from MQH (used outside its original purpose in the filling model); door outflow ignores the neutral plane and inflow below it, so late-time layer heights near the floor are approximate (once the room is smoke-logged the plume still delivers slightly more mass than the door removes, so z chatters between 0 and ~0.1 m; the z ≈ 0.10 m check value at 300 s is a point on that chatter); Heskestad's plume equation is for heights above the flame tip, so it is used outside its range when the layer is below the flames; flame height depends on the assumed fire diameter; tenability uses layer height and temperature only (no toxicity or visibility); occupant walks straight at constant speed.
 
 ## Ideas for later (in rough priority order)
-1. Validate every step against NRC NUREG-1805 (Fire Dynamics Tools) example problems and document the comparison.
-2. Sprinkler / heat detector activation time (Alpert ceiling jet + RTI, DETACT-QS), and cap the fire when a sprinkler activates.
-3. SI / US customary unit toggle (US firms use ft, °F, BTU/s).
-4. Fire decay phase and total fuel load.
-5. Compare one scenario with NIST CFAST (free zone model).
-6. Export a one-page PDF report of a scenario.
+Done: NUREG-1805 validation (spreadsheet examples), sprinkler / heat detector activation, SI / US unit toggle.
+1. Add the worked examples from the NUREG-1805 report volumes (PDF) to `fire_model/validation.py`.
+2. Smoke detector activation (NUREG-1805 Ch. 10 has a smoke detector sheet), so smoke alarm times can be calculated.
+3. Fire decay phase and total fuel load.
+4. Compare one scenario with NIST CFAST (free zone model).
+5. Export a one-page PDF report of a scenario.
 
 ## References
 - NFPA 72, Annex B (t-squared fires)
 - McCaffrey, Quintiere & Harkleroad, Fire Technology 17 (1981)
 - Babrauskas (1980); Thomas (1981) flashover correlations
 - Heskestad, plume chapter, SFPE Handbook of Fire Protection Engineering
-- U.S. NRC NUREG-1805, Fire Dynamics Tools
+- U.S. NRC NUREG-1805, Fire Dynamics Tools (Supplement 1, 2013, spreadsheets v1805.1)
+- Alpert, Fire Technology 8 (1972): ceiling jet
+- Madrzykowski, ASIAFLAM'95 (1995): sprinkler RTI; NFPA Automatic Sprinkler Systems Handbook: ratings; NFPA 72 Table B-3.2.5.1: heat detector RTI
+- U.S. NRC NUREG-1824, V&V of fire models (experimental validation of the FDTs)
 - SFPE Engineering Guide to Human Behavior in Fire (ASET/RSET)

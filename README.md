@@ -4,9 +4,11 @@
 > methods with real limits (listed below). Don't use its results for real design decisions.
 
 An interactive web app that predicts how a fire in one room grows, how hot the smoke
-gets, whether the room flashes over, and whether the people inside get out before
-conditions become untenable. Every result comes from a standard hand-calculation method
-in fire dynamics, and the app explains each one.
+gets, whether the room flashes over, whether a sprinkler or heat detector activates, and
+whether the people inside get out before conditions become untenable. Every result comes
+from a standard hand-calculation method in fire dynamics, the app shows each calculation
+with the numbers substituted in, and the methods are checked against the U.S. NRC's
+Fire Dynamics Tools (NUREG-1805).
 
 A first-year fire protection engineering project by **Dhruv Sirigiri**
 (B.S. Fire Protection Engineering, University of Maryland).
@@ -19,7 +21,8 @@ A first-year fire protection engineering project by **Dhruv Sirigiri**
 
 ## What it does
 
-You describe a fire, a room and the people in it. The app works through four steps:
+You describe a fire, a room, its fire protection and the people in it, in metric or US
+customary units. The app works through four steps:
 
 | Step | Question | Method |
 |---|---|---|
@@ -27,22 +30,30 @@ You describe a fire, a room and the people in it. The app works through four ste
 | 2 | How hot does the smoke get? | MQH hot gas layer correlation |
 | 3 | Does the room flash over? | Babrauskas, Thomas and MQH flashover methods; air supply (ventilation) limit |
 | 4 | Do people get out in time? | Two-zone smoke filling (Heskestad plume); ASET vs RSET |
+| + | Does a sprinkler or heat detector activate? | Alpert ceiling jet and RTI heating (DETACT-QS) |
 
 It then shows:
 
 - **A verdict**: the flashover time range, when the room becomes untenable (ASET), when
-  everyone is out (RSET), and the safety margin between them.
+  everyone is out (RSET), and the safety margin between them. With a sprinkler, also its
+  activation time and what it changed (flashover and smoke temperature with and without it).
 - **A 3D view of the room** you can play like a video: the smoke layer dropping and
-  heating up, the fire growing and the occupant walking to the door. It draws the
-  two-zone model's results; it is not a 3D fire simulation (that would need CFD
-  software such as NIST's FDS).
-- **Interactive charts** of the fire size, the smoke layer temperature and the smoke
-  layer height, plus the flashover methods table and the numbers behind every chart.
-- **An explanation of every step**, with its equations, limits and sources.
+  heating up, flames at Heskestad's flame height, smoke spilling out of the door, the
+  sprinkler spraying once it activates, and the occupant walking to the door. It draws the
+  model's results; it is not a 3D fire simulation (that would need CFD software such as
+  NIST's FDS).
+- **Interactive charts** of fire size, smoke and device temperatures, and smoke layer
+  height, the flashover methods table, and the numbers behind every chart.
+- **"Check the calculation by hand"**: every equation at a moment you choose, with the
+  scenario's numbers substituted in, so each line can be redone with a calculator.
+- **The NUREG-1805 validation table**, an explanation of every method, and an honest
+  section on how realistic the results are.
 
 ## The methods
 
-Ambient temperature $T_a$ = 20 °C. SI units throughout (kW, m, s, kg).
+Ambient temperature $T_a$ = 20 °C. The physics is in SI units throughout (kW, m, s, kg),
+as the correlations were written; with US customary units selected, the app converts
+inputs to SI and results back (1 ft = 0.3048 m, 1 Btu = 1.05505585 kJ).
 
 ### Step 1: Fire growth (t-squared fire)
 
@@ -52,7 +63,7 @@ Q(t) = \alpha t^2 \qquad \alpha = \frac{1055}{t_g^2}
 
 The fire grows until it reaches the peak heat release rate of the fuel; there is no
 decay phase. Growth classes from NFPA 72, Annex B, defined by the time $t_g$ to reach
-1055 kW (1000 BTU/s):
+1055 kW (1000 Btu/s):
 
 | Growth | $t_g$ (s) | α (kW/s²) |
 |---|---:|---:|
@@ -144,10 +155,61 @@ explicit Euler method, $\Delta t$ = 0.25 s.
   + walking distance / walking speed.
 - The design works only if ASET > RSET.
 
+### Sprinklers and heat detectors
+
+The plume spreads under the ceiling as a hot, fast ceiling jet. Alpert's correlations
+give its temperature and velocity at a horizontal distance $r$ from the fire under a
+ceiling $H$ above it (here $H$ is the room height):
+
+```math
+T_{jet} - T_a = \begin{cases} 16.9\, Q^{2/3}/H^{5/3} & r/H \le 0.18 \\ 5.38\,(Q/r)^{2/3}/H & r/H > 0.18 \end{cases}
+\qquad
+u_{jet} = \begin{cases} 0.96\,(Q/H)^{1/3} & r/H \le 0.15 \\ 0.195\, Q^{1/3} H^{1/2} / r^{5/6} & r/H > 0.15 \end{cases}
+```
+
+A sprinkler bulb or detector heats with a lag set by its Response Time Index (RTI) and
+activates at its rated temperature:
+
+```math
+\frac{dT_d}{dt} = \frac{\sqrt{u_{jet}}}{RTI}\,(T_{jet} - T_d)
+```
+
+Because the fire grows, this is stepped forward every 0.25 s with the current fire size
+(DETACT-QS). When a **sprinkler** activates, the fire stops growing and stays at its size
+then (a common cautious design assumption). A **heat detector** can set the alarm time
+instead of a smoke alarm. RTI values and temperature ratings come from the NUREG-1805
+tables (Madrzykowski 1995 for sprinklers; NFPA 72 Table B-3.2.5.1 for heat detectors).
+
+**Flame height** (3D view, and the check of where the flames reach) uses Heskestad's
+correlation $L = 0.235\,Q^{2/5} - 1.02\,D$. The burning diameter grows with the fire,
+$D = D_{full}\sqrt{Q/Q_{peak}}$: a t-squared fire is what flames spreading at a steady
+speed over fuel with a fixed heat release per square metre produce, so its burning area
+grows in proportion to $Q$.
+
 ## How it was checked
 
-There are 75 automated tests (`pytest`). The model reproduces every check value worked
-out with the original single-file prototype (`index.html`):
+There are 153 automated tests (`pytest`).
+
+**Against the U.S. NRC's Fire Dynamics Tools (NUREG-1805).** Each NRC spreadsheet comes
+with a worked example; the model was run on the same inputs. **33 of 33 comparisons
+agree** within their tolerance. Full table: [docs/VALIDATION.md](docs/VALIDATION.md).
+
+| NUREG-1805 example | NRC | This model |
+|---|---:|---:|
+| Ch. 2.1 MQH temperature rise at 60 s (300 kW, concrete room) | 125.232 K | 125.232 K with the NRC's h_k; 125.377 K (+0.12%) with the model's own* |
+| Ch. 13 Babrauskas / Thomas / MQH flashover HRR | 2612.72 / 5620.17 / 2740.12 kW | 2612.72 / 5620.17 / 2740.12 kW |
+| Ch. 10 sprinkler activation (1000 kW, RTI 42, 100 °C, H = r = 3 m) | 73.67 s | 73.67 s exact formula; 73.50 s time-stepped |
+| Ch. 10 heat detector activation (1000 kW, RTI 306, 53.3 °C, H = 4 m, r = 3 m) | 141.21 s | 141.21 s exact formula; 141.25 s time-stepped |
+| Ch. 3 Heskestad flame height (D = 1.09 m, 3136 kW) | 4.77387 m | 4.77387 m |
+
+\*The NRC rounds concrete's k·ρ·c to 2.9; 0.0016 × 2400 × 0.75 = 2.88. With 2.9 the
+difference disappears. NUREG-1805 uses a different smoke-filling method, so Step 4's
+smoke layer height is not part of this comparison.
+
+**Against the original prototype.** The model reproduces every check value worked out
+with the single-file prototype (`index.html`), agrees with it to about $10^{-13}$ at
+every second of four scenarios, and the app displays the same values as the prototype
+for all 90 numbers compared across six scenarios:
 
 | Scenario | Quantity | Expected | Model |
 |---|---|---|---|
@@ -167,18 +229,14 @@ out with the original single-file prototype (`index.html`):
 
 Bedroom 5 × 4 × 2.4 m with a 0.9 × 2.0 m door; dorm 4.5 × 3.5 × 2.6 m with a 0.9 × 2.1 m
 door (fast fire, 2500 kW sofa, 16 mm gypsum). Living room 7 × 6 × 2.4 m with a
-1.8 × 2.1 m opening (slow fire, 750 kW chair).
+1.8 × 2.1 m opening (slow fire, 750 kW chair). One original check value was corrected:
+"150 mm concrete at 150 s ≈ 278 °C" is the result for concrete left at 16 mm thick; for
+150 mm concrete the equation gives 252 °C.
 
-Beyond the check values:
-
-- The Python model agrees with the JavaScript prototype to about $10^{-13}$ at every
-  second of four scenarios, and the app displayed the same values as the prototype for
-  all 90 numbers compared across six scenarios.
-- One original check value was corrected. "150 mm concrete at 150 s ≈ 278 °C" turned out
-  to be the result for concrete left at 16 mm thick: its heat then soaks through in
-  72 s, so by 150 s $h_k = k/\delta$. For 150 mm concrete the equation gives 252 °C.
-
-Next step: validate each method against the worked example problems in NRC NUREG-1805.
+**How realistic is it?** Matching the NRC shows the equations are coded correctly. How
+close the correlations come to real fires is a separate question, studied by the NRC
+against full-scale experiments in NUREG-1824. Read the results as engineering
+estimates; the app's "Is this calculator realistic?" section explains why.
 
 ## Run it yourself
 
@@ -202,18 +260,26 @@ pytest
 ## Project structure
 
 ```
-fire_model/          the physics, as pure functions (no user interface code)
-  growth.py          Step 1: t-squared fire growth
+fire_model/          the physics, as pure functions (no user interface code), SI units
+  growth.py          Step 1: t-squared fire growth, burning diameter
   room.py            room geometry: opening factor, A_T, floor area, input checks
   layer_temp.py      Step 2: MQH layer temperature, lining properties
   flashover.py       Step 3: flashover thresholds, air supply limit
-  smoke_filling.py   Step 4: two-zone smoke filling (Euler method)
+  smoke_filling.py   Step 4: two-zone smoke filling (Euler method), Heskestad flame height
   egress.py          Step 4: ASET, RSET, occupant timeline
+  detection.py       sprinklers and heat detectors: Alpert ceiling jet, RTI, DETACT-QS
   timeline.py        "first second at which something happens" helpers
-  scenario.py        runs all four steps for one scenario
-app.py               the Streamlit web app
+  scenario.py        runs all the steps for one scenario
+  validation.py      the NUREG-1805 comparisons (NRC inputs, answers and cells)
+app.py               the Streamlit web app: inputs, verdict, page layout
+charts.py            the 2D charts
 room_view.py         the 3D room view
-tests/               pytest tests, including every check value
+worked_example.py    "check the calculation by hand"
+explanations.py      the explanatory text, validation and realism sections
+units.py             metric / US customary conversions for display
+tests/               pytest tests, including every check value and NRC example
+docs/VALIDATION.md   the NUREG-1805 validation report
+docs/nureg-1805/     copies of the NRC spreadsheets used
 index.html           the original single-file prototype (reference implementation)
 ```
 
@@ -221,7 +287,11 @@ index.html           the original single-file prototype (reference implementatio
 
 - One room with one opening. Smoke spreading to other rooms is not modeled.
 - The fire sits on the floor and never decays or burns out.
-- No sprinklers.
+- A sprinkler only stops the fire from growing; its water cooling the smoke and
+  shrinking the fire is not modeled.
+- Alpert's ceiling jet correlations are for a large flat ceiling. In a small room the
+  hot layer makes the real ceiling jet hotter, so activation times here tend to be late
+  (on the cautious side).
 - The smoke layer has one average temperature, from MQH. MQH was fitted to tests below
   about 600 °C, and the smoke filling model uses it outside its original purpose.
 - The door outflow ignores the neutral plane and the fresh air flowing in below it, so
@@ -229,7 +299,8 @@ index.html           the original single-file prototype (reference implementatio
   the plume still delivers slightly more gas than the door removes, so the layer height
   jitters between about 0 and 0.1 m.
 - Heskestad's plume equation is meant for heights above the flame tip; when the smoke
-  layer is lower than the flames it is used outside that range.
+  layer is lower than the flames it is used outside that range (the app says when).
+- Flame height depends on the fire diameter, which is an assumed input.
 - Tenability uses layer height and temperature only (no toxic gases or visibility).
 - The occupant walks straight to the door at a constant speed.
 
@@ -238,23 +309,32 @@ from NIST), together with safety factors.
 
 ## Ideas for later
 
-1. Validate every step against the NRC NUREG-1805 example problems.
-2. Sprinkler and heat detector activation time (Alpert ceiling jet, RTI, DETACT-QS), with
-   the fire capped when a sprinkler activates.
-3. SI / US customary unit toggle (ft, °F, BTU/s).
-4. Fire decay phase and total fuel load.
-5. Compare one scenario with NIST CFAST.
-6. Export a one-page PDF report of a scenario.
+1. Add the worked examples from the NUREG-1805 report volumes to the validation.
+2. Smoke detector activation (NUREG-1805 Chapter 10 also covers it), so the alarm time
+   can be calculated for smoke alarms too.
+3. Fire decay phase and total fuel load.
+4. Compare one scenario with NIST CFAST.
+5. Export a one-page PDF report of a scenario.
 
 ## References
 
-- NFPA 72, *National Fire Alarm and Signaling Code*, Annex B (t-squared fires).
+- NFPA 72, *National Fire Alarm and Signaling Code*, Annex B (t-squared fires) and
+  Table B-3.2.5.1 (heat detector RTI, 1999 edition).
 - McCaffrey, B. J., Quintiere, J. G. and Harkleroad, M. F., "Estimating Room
   Temperatures and the Likelihood of Flashover Using Fire Test Data Correlations,"
   *Fire Technology* 17 (1981).
 - Babrauskas, V. (1980); Thomas, P. H. (1981): flashover correlations.
-- Heskestad, G., plume chapter, *SFPE Handbook of Fire Protection Engineering*.
-- U.S. Nuclear Regulatory Commission, NUREG-1805, *Fire Dynamics Tools (FDTs)*.
+- Heskestad, G., plume and flame height, *SFPE Handbook of Fire Protection Engineering*.
+- Alpert, R. L., "Calculation of Response Time of Ceiling-Mounted Fire Detectors,"
+  *Fire Technology* 8 (1972).
+- Madrzykowski, D., "Evaluation of Sprinkler Activation Prediction Methods,"
+  ASIAFLAM '95 (1995): generic sprinkler RTI values.
+- NFPA, *Automatic Sprinkler Systems Handbook*: sprinkler temperature ratings.
+- U.S. Nuclear Regulatory Commission, NUREG-1805 Supplement 1, *Fire Dynamics Tools
+  (FDTs)* (2013), and its spreadsheets (version 1805.1).
+- U.S. Nuclear Regulatory Commission, NUREG-1824, *Verification and Validation of
+  Selected Fire Models for Nuclear Power Plant Applications*.
 - SFPE, *Engineering Guide to Human Behavior in Fire* (ASET/RSET framework).
 
-Peak fire sizes and room presets are rounded, generic examples.
+Peak fire sizes, room presets, the default fire diameter and device distances are
+rounded, generic examples.
