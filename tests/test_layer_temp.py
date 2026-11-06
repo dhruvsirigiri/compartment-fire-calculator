@@ -48,20 +48,24 @@ def test_layer_temperature_at_231_s_is_out_of_mqh_range():
     assert not is_within_mqh_range(temperature)
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Known disagreement, flagged for Dhruv: CLAUDE.md says ~278 °C, but the "
-        "MQH equation in CLAUDE.md, the index.html prototype and a hand "
-        "calculation all give 251.8 °C for 150 mm concrete at 150 s. The check "
-        "value is kept unchanged until it is confirmed or corrected."
-    ),
-)
 def test_layer_temperature_with_concrete_at_150_s():
-    # CLAUDE.md: "With 150 mm concrete at 150 s: ~ 278 °C"
+    # CLAUDE.md: "With 150 mm concrete at 150 s: ~ 252 °C"
+    # t_p for 150 mm concrete is ~6300 s, so at 150 s the wall still acts as a
+    # very thick solid: h_k = sqrt(k rho c / t).
     assert CONCRETE.thickness == 0.150
     q = t_squared_hrr(150, ALPHA_FAST, SOFA)
-    assert mqh_layer_temperature(150, q, BEDROOM, CONCRETE) == pytest.approx(278, abs=0.5)
+    assert mqh_layer_temperature(150, q, BEDROOM, CONCRETE) == pytest.approx(252, abs=0.5)
+
+
+def test_thin_concrete_at_150_s_explains_the_old_278_c_value():
+    # CLAUDE.md once listed ~278 °C for this case. That is what concrete gives
+    # when the thickness is left at gypsum's 16 mm: t_p is then only 72 s, so by
+    # 150 s heat flows straight through the wall (h_k = k / delta = 0.1), the
+    # wall absorbs less heat and the layer is hotter.
+    thin_concrete = replace(CONCRETE, thickness=0.016)
+    assert thermal_penetration_time(thin_concrete) == pytest.approx(72, abs=0.5)
+    q = t_squared_hrr(150, ALPHA_FAST, SOFA)
+    assert mqh_layer_temperature(150, q, BEDROOM, thin_concrete) == pytest.approx(278, abs=0.5)
 
 
 def test_concrete_room_is_cooler_than_gypsum_room():

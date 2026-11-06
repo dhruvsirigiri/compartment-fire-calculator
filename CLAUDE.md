@@ -65,7 +65,7 @@ Fast fire (α = 0.0469), sofa peak 2500 kW, 16 mm gypsum.
 
 Bedroom 5 × 4 × 2.4 m, door 0.9 × 2.0 m:
 - t_p ≈ 398 s; opening factor 2.546; A_T 81.4 m²
-- T_g at t = 150 s (Q = 1055 kW): ≈ 388 °C. At 231 s (Q = 2500 kW): ≈ 723 °C. With 150 mm concrete at 150 s: ≈ 278 °C
+- T_g at t = 150 s (Q = 1055 kW): ≈ 388 °C. At 231 s (Q = 2500 kW): ≈ 723 °C. With 150 mm concrete at 150 s: ≈ 252 °C (an earlier value of ≈ 278 °C is what concrete gives if the lining thickness is left at 16 mm: t_p is then 72 s, so h_k = k/δ at 150 s)
 - Babrauskas 1909 kW; Thomas 1597 kW; Q_vent 3818 kW; MQH flashover at 184 s
 - Smoke layer reaches 1.8 m at 29 s; z at 60 / 120 / 300 s ≈ 1.22 / 0.88 / 0.10 m
 
