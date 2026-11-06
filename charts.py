@@ -33,6 +33,11 @@ PALETTES = {
         text="#5A6475",  # chart labels (text never uses the data colors)
         surface="#FFFFFF",  # page background, behind chart labels
         safe="#15803D",  # 3D view: occupant is out (always shown with a text label)
+        smoke_thin="#B4BAC2",  # 3D view: cool, thin smoke ...
+        smoke_thick="#33383F",  # ... darkening to hot, sooty smoke (glows red above ~525 °C)
+        floor="#CDBFA8",  # 3D view scenery (illustrative)
+        wall="#E3E6EA",
+        furniture="#7D6F64",
     ),
     "dark": dict(
         fire="#E8590C",
@@ -45,6 +50,11 @@ PALETTES = {
         text="#9AA3B2",
         surface="#11151C",
         safe="#4ADE80",
+        smoke_thin="#E5E7EB",  # on a dark page, smoke is drawn light so it stays visible
+        smoke_thick="#7E848D",
+        floor="#4A4034",
+        wall="#2B323D",
+        furniture="#6A5E55",
     ),
 }
 
