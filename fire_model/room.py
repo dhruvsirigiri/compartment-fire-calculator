@@ -56,3 +56,20 @@ def interior_surface_area(room):
 def floor_area(room):
     """Floor area (m^2). The smoke layer fills the room across this area."""
     return room.length * room.width
+
+
+def room_problems(room):
+    """List of reasons the room is not physically possible (empty if it is OK).
+
+    The model needs a door that fits in a wall and below the ceiling: a door
+    taller than the room, for example, would let smoke pour out before any
+    layer could form, and the equations would no longer describe a real room.
+    """
+    problems = []
+    if min(room.length, room.width, room.height, room.door_width, room.door_height) <= 0:
+        problems.append("Every room and door dimension must be greater than zero.")
+    if room.door_width > max(room.length, room.width):
+        problems.append("The door is wider than every wall. Make it narrower than the room.")
+    if room.door_height > room.height:
+        problems.append("The door is taller than the ceiling. Lower the door height.")
+    return problems

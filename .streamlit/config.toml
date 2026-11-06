@@ -1,0 +1,19 @@
+# Streamlit settings for the Compartment Fire Calculator.
+# Colors follow the index.html prototype. Streamlit shows the light or dark
+# theme to match the viewer's system setting (they can switch in the app menu).
+
+[theme.light]
+primaryColor = "#C2410C"              # ember: buttons, sliders, selected options
+backgroundColor = "#FFFFFF"
+secondaryBackgroundColor = "#F3F4F6"  # sidebar and input backgrounds
+textColor = "#18202C"
+
+[theme.dark]
+primaryColor = "#E8590C"
+backgroundColor = "#11151C"
+secondaryBackgroundColor = "#1A2029"
+textColor = "#E8EBF0"
+
+[browser]
+# Don't send anonymous usage statistics to Streamlit.
+gatherUsageStats = false

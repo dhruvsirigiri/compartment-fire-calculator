@@ -8,6 +8,7 @@ from fire_model.room import (
     floor_area,
     interior_surface_area,
     opening_factor,
+    room_problems,
 )
 
 BEDROOM = Room(length=5, width=4, height=2.4, door_width=0.9, door_height=2.0)
@@ -32,3 +33,14 @@ def test_room_is_frozen():
     # A Room can't be changed by accident after it is created.
     with pytest.raises(Exception):
         BEDROOM.length = 10
+
+
+def test_check_values_rooms_are_valid():
+    assert room_problems(BEDROOM) == []
+
+
+def test_impossible_rooms_are_reported():
+    too_tall = Room(length=5, width=4, height=2.4, door_width=0.9, door_height=2.6)
+    too_wide = Room(length=3, width=2, height=2.4, door_width=3.5, door_height=2.0)
+    assert any("taller than the ceiling" in p for p in room_problems(too_tall))
+    assert any("wider than every wall" in p for p in room_problems(too_wide))
