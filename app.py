@@ -233,7 +233,7 @@ with st.sidebar:
     )
     _, hrr_min, hrr_max, hrr_step, hrr_us_step, *_ = UNIT_INPUTS["peak_hrr"]
     st.slider(f"Peak heat release rate ({u.unit('hrr')})", u.show("hrr", hrr_min), u.show("hrr", hrr_max),
-              step=hrr_us_step if u.us else hrr_step, key="peak_hrr", on_change=mark_fuel_custom)
+              step=hrr_us_step if u.us else hrr_step, format="%.0f", key="peak_hrr", on_change=mark_fuel_custom)
     unit_number(st, "Fire diameter at full size", "fire_diameter",
                 help="Width of the burning area when the fire reaches its peak. While it grows, the burning "
                      "area grows with it (diameter ∝ √Q, as a t-squared fire spreads). Only used for the "
