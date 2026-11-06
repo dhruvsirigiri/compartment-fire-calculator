@@ -11,6 +11,7 @@ from fire_model.growth import (
     FUEL_PEAK_HRR,
     GROWTH_TIMES,
     REFERENCE_HRR,
+    burning_diameter,
     growth_coefficient,
     t_squared_hrr,
     time_to_reach,
@@ -54,3 +55,13 @@ def test_time_to_reach_is_the_inverse_of_the_growth_curve():
     # ...and the sofa fire peaks between 230 and 231 s, consistent with the
     # check value above.
     assert 230 < t < 231
+
+
+def test_burning_area_grows_in_step_with_the_fire():
+    # At the peak HRR the fire covers its full diameter.
+    assert burning_diameter(2500, 2500, 1.2) == pytest.approx(1.2)
+    # Area is proportional to Q, so a quarter of the fire has half the diameter.
+    assert burning_diameter(625, 2500, 1.2) == pytest.approx(0.6)
+    # Never bigger than full size, and nothing burning before ignition.
+    assert burning_diameter(5000, 2500, 1.2) == pytest.approx(1.2)
+    assert burning_diameter(0, 2500, 1.2) == 0.0

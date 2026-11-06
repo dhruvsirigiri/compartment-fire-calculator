@@ -52,6 +52,19 @@ def t_squared_hrr(t, alpha, peak_hrr):
     return min(alpha * t**2, peak_hrr)
 
 
+def burning_diameter(hrr, peak_hrr, full_diameter):
+    """Diameter (m) of the burning area while the fire grows.
+
+    A t-squared fire is what you get when flames spread outward at a steady
+    speed over fuel that releases a fixed amount of heat per square metre: the
+    burning area then grows like t^2, just like Q. So the area is proportional to
+    Q, and the diameter to sqrt(Q). It reaches `full_diameter` at the peak HRR.
+    """
+    if hrr <= 0 or peak_hrr <= 0:
+        return 0.0
+    return full_diameter * math.sqrt(min(1.0, hrr / peak_hrr))
+
+
 def time_to_reach(hrr, alpha):
     """Time (s) for a t-squared fire to grow to `hrr` (kW).
     This is Q = alpha * t^2 solved for t:  t = sqrt(Q / alpha)."""

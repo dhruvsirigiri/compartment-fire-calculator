@@ -80,7 +80,7 @@ def test_bedroom_preset_fills_in_the_room(app):
 def test_concrete_preset_sets_lining_and_thickness(app):
     app.selectbox(key="room_preset").set_value("Concrete storage room").run()
     assert app.session_state.lining == "Concrete"
-    assert app.session_state.thickness_mm == 150
+    assert app.session_state.thickness == 150
 
 
 def test_editing_a_dimension_switches_room_to_custom(app):
@@ -103,3 +103,58 @@ def test_occupant_preset_changes_rset(app):
 def test_all_four_charts_are_drawn(app):
     # 3D room view + heat release rate + temperature + smoke layer height
     assert len(app.get("plotly_chart")) == 4
+
+
+# ---- Unit switch ----
+
+def test_switching_to_us_units_converts_inputs_but_not_results(app):
+    before = [m.value for m in app.metric[:4]]
+    app.radio(key="units").set_value("US customary").run()
+    assert not app.exception
+    s = app.session_state
+    assert s.length == pytest.approx(4.5 / 0.3048)  # 14.76 ft
+    assert s.thickness == pytest.approx(16 / 25.4)  # 0.63 in
+    assert s.peak_hrr == pytest.approx(2500 / 1.05505585262)  # 2,370 Btu/s
+    assert metric(app, "Air supply limit") == "3,894 Btu/s"  # 4,108 kW
+    assert metric(app, "Smoke reaches 5.9 ft") == "29 s"  # 1.8 m = 5.9 ft
+    assert [m.value for m in app.metric[:4]] == before  # the verdict is the same fire
+
+    app.radio(key="units").set_value("Metric (SI)").run()
+    assert app.session_state.length == pytest.approx(4.5)
+
+
+def test_presets_fill_in_us_values(app):
+    app.radio(key="units").set_value("US customary").run()
+    app.selectbox(key="room_preset").set_value("Bedroom").run()
+    assert not app.exception
+    assert app.session_state.length == pytest.approx(5 / 0.3048)
+    assert app.session_state.door_height == pytest.approx(2.0 / 0.3048)
+    # Same bedroom as in metric units, so the same check value: 1.8 m at 29 s.
+    assert metric(app, "Smoke reaches 5.9 ft") == "29 s"
+
+
+# ---- Fire protection ----
+
+def test_sprinkler_shows_activation_and_prevents_flashover(app):
+    app.selectbox(key="sprinkler_type").set_value("Quick response bulb").run()
+    assert not app.exception
+    assert metric(app, "Sprinkler activates") == "109 s"  # 108.5 s, ordinary rating, 2 m away
+    assert metric(app, "Flashover") == "None"
+    assert metric(app, "Flashover without") == "182–210 s → none"
+
+
+def test_heat_detector_sets_the_alarm(app):
+    app.checkbox(key="use_heat_detector").check().run()
+    assert not app.exception
+    assert app.number_input(key="detection").disabled
+    assert metric(app, "Heat detector alarm") == "116 s"  # 115.5 s
+    assert metric(app, "Everyone is out") == "149 s"  # 115.5 + 30 + 4/1.2
+
+
+# ---- Proof sections ----
+
+def test_hand_calculation_and_validation_sections_are_shown(app):
+    assert len(app.tabs) >= 4  # Step 1-4 hand calculations
+    texts = " ".join(m.value for m in app.markdown)
+    assert "comparisons agree" in texts
+    assert "Is this calculator realistic" in " ".join(h.value for h in app.subheader)
