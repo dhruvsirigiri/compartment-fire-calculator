@@ -184,7 +184,7 @@ def room_3d_figure(result, room, occupant, colors, start_time=120):
             zaxis=dict(title="Height (m)", range=[0, H + 0.1], showbackground=False),
             aspectmode="manual",
             aspectratio=_true_scale(L + 1.2, W + 0.4, H + 0.1),
-            camera=dict(eye=dict(x=1.0, y=-1.4, z=0.75)),
+            camera=dict(eye=dict(x=0.9, y=-1.25, z=0.62)),
         ),
         updatemenus=[dict(
             type="buttons", direction="left", x=0.0, y=0.0, xanchor="left", yanchor="top",

@@ -44,7 +44,7 @@ def test_default_dorm_verdict(app):
     # CLAUDE.md: MQH flashover 182 s (the earliest method here); 1.8 m at 29 s;
     # RSET 63.3 s.
     assert metric(app, "Flashover").startswith("182–")
-    assert metric(app, "Room becomes untenable") == "29 s"
+    assert metric(app, "Room untenable") == "29 s"
     assert metric(app, "Everyone is out") == "63 s"
     assert metric(app, "Safety margin") == "−34 s"  # 29 - 63.3
     assert any("untenable 34 s before" in box.value for box in app.error)
@@ -66,7 +66,7 @@ def test_living_room_slow_chair_has_no_flashover(app):
     assert app.session_state.peak_hrr == 750  # the fuel preset set the peak HRR
     assert metric(app, "Flashover") == "None"
     assert metric(app, "Smoke reaches 1.8 m") == "86 s"
-    assert metric(app, "Room becomes untenable") == "86 s"
+    assert metric(app, "Room untenable") == "86 s"
     assert any("get out with 23 s to spare" in box.value for box in app.success)
 
 

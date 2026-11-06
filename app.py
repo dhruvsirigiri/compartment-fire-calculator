@@ -302,7 +302,7 @@ with st.container(border=True):
         v1.metric("Flashover", "None")
         v1.caption("The fire stays below every flashover threshold")
 
-    v2.metric("Room becomes untenable (ASET)", seconds(result.aset, missing="—"))
+    v2.metric("Room untenable (ASET)", seconds(result.aset, missing="—"))
     v2.caption(result.aset_reason or f"Not within {t_end} s: smoke stays above head height and below 200 °C")
 
     v3.metric("Everyone is out (RSET)", seconds(result.rset))
