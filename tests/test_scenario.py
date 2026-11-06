@@ -7,7 +7,16 @@ consistent with each other.
 
 import pytest
 
+from fire_model.detection import (
+    HEAT_DETECTOR_RTI,
+    SPRINKLER_RATING_F,
+    SPRINKLER_RTI,
+    Device,
+    detector_response,
+    fahrenheit_to_celsius,
+)
 from fire_model.egress import OCCUPANT_PRESETS, REASON_SMOKE_LOW
+from fire_model.flashover import effective_hrr
 from fire_model.growth import FUEL_PEAK_HRR, GROWTH_TIMES, growth_coefficient, time_to_reach
 from fire_model.layer_temp import LININGS
 from fire_model.room import Room
@@ -82,3 +91,63 @@ def test_energy_released_matches_the_integral_of_alpha_t_squared():
     result = run_scenario(ALPHA_FAST, 1e6, DORM, GYPSUM, AWAKE, t_end=100)
     exact_mj = ALPHA_FAST * 100**3 / 3 / 1000
     assert result.energy_released == pytest.approx(exact_mj, rel=1e-3)
+
+
+# ---- Fire protection: sprinklers and heat detectors ----
+
+ORDINARY_C = fahrenheit_to_celsius(SPRINKLER_RATING_F["Ordinary"])
+QUICK = Device("Quick response bulb", SPRINKLER_RTI["Quick response bulb"], ORDINARY_C, radial_distance=2.0)
+HEAT_DETECTOR = Device("Heat detector", HEAT_DETECTOR_RTI[135.0][30], fahrenheit_to_celsius(135.0), radial_distance=2.0)
+SOFA = FUEL_PEAK_HRR["Sofa"]
+
+
+def test_no_fire_protection_changes_nothing(dorm):
+    assert dorm.peak_hrr_used == SOFA
+    assert dorm.sprinkler_time is None and dorm.heat_detector_time is None
+    assert dorm.alarm_time == AWAKE.detection_time
+
+
+def test_sprinkler_holds_the_fire_at_its_size_when_it_activates(dorm):
+    protected = run_scenario(ALPHA_FAST, SOFA, DORM, GYPSUM, AWAKE, t_end=600, sprinkler=QUICK)
+    t_act = protected.sprinkler_time
+    assert t_act is not None
+
+    # Activation is found in the unprotected fire (nothing has changed before it).
+    expected, _ = detector_response(lambda t: effective_hrr(t, ALPHA_FAST, SOFA, DORM), DORM.height, QUICK, 600)
+    assert t_act == expected
+
+    # Before activation the fire is unchanged; afterwards it stays at its size then.
+    assert protected.sprinkler_hrr == pytest.approx(effective_hrr(t_act, ALPHA_FAST, SOFA, DORM))
+    for t in range(0, int(t_act)):
+        assert protected.hrr[t] == pytest.approx(dorm.hrr[t])
+    assert all(q == pytest.approx(protected.sprinkler_hrr) for q in protected.hrr[int(t_act) + 1:])
+    assert max(protected.hrr) == pytest.approx(protected.sprinkler_hrr)
+
+    # In this room a quick-response sprinkler keeps the fire below every
+    # flashover threshold, but the smoke still reaches head height first.
+    assert protected.flashover_range is None
+    assert protected.aset == dorm.aset == 29
+
+
+def test_sprinkler_element_heats_up_to_its_rating(dorm):
+    protected = run_scenario(ALPHA_FAST, SOFA, DORM, GYPSUM, AWAKE, t_end=600, sprinkler=QUICK)
+    temps = protected.sprinkler_temps
+    assert len(temps) == 601
+    assert temps[int(protected.sprinkler_time) - 1] < ORDINARY_C <= temps[int(protected.sprinkler_time) + 1]
+
+
+def test_heat_detector_sets_the_alarm_time():
+    result = run_scenario(ALPHA_FAST, SOFA, DORM, GYPSUM, AWAKE, t_end=600, heat_detector=HEAT_DETECTOR)
+    assert result.alarm_time == result.heat_detector_time
+    walking = AWAKE.walk_distance / AWAKE.walk_speed
+    assert result.rset == pytest.approx(result.heat_detector_time + AWAKE.reaction_time + walking)
+    assert result.heat_detector_time > AWAKE.detection_time  # slower than the smoke alarm preset
+
+
+def test_heat_detector_that_never_activates_means_no_alarm():
+    # A 100 kW wastebasket fire never heats a 196 °F detector 2 m away.
+    slow_detector = Device("Heat detector", HEAT_DETECTOR_RTI[196.0][10], fahrenheit_to_celsius(196.0), 2.0)
+    result = run_scenario(ALPHA_FAST, FUEL_PEAK_HRR["Wastebasket"], DORM, GYPSUM, AWAKE,
+                          t_end=600, heat_detector=slow_detector)
+    assert result.heat_detector_time is None
+    assert result.rset is None and result.safety_margin is None

@@ -102,7 +102,8 @@ def aset(layer_heights, layer_temps):
 
 def safety_margin(aset_time, rset_time):
     """ASET - RSET (s). Positive means people are out before it is untenable.
-    None if the room never became untenable (ASET not reached)."""
-    if aset_time is None:
+    None if the room never became untenable (ASET not reached), or if RSET is
+    unknown because the alarm never sounded."""
+    if aset_time is None or rset_time is None:
         return None
     return aset_time - rset_time

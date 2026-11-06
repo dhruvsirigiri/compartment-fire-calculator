@@ -7,19 +7,23 @@ no physics.
 
     Step 1  growth.py         t-squared fire
     Step 3  flashover.py      ...capped by the air supply  -> Q_eff(t)
+    (opt.)  detection.py      sprinkler activation caps the fire
     Step 2  layer_temp.py     MQH layer temperature using Q_eff(t)
     Step 4  smoke_filling.py  smoke layer height
     Step 3  flashover.py      when each flashover threshold is reached
+    (opt.)  detection.py      heat detector activation sets the alarm time
     Step 4  egress.py         ASET, RSET and the safety margin
 
 Time series are recorded once per whole second: series[t] is the value at t s.
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
+from fire_model.detection import detector_response
 from fire_model.egress import HEAD_HEIGHT, TENABILITY_TEMP, aset, rset, safety_margin
 from fire_model.flashover import (
     babrauskas_flashover_hrr,
+    effective_hrr,
     hrr_history,
     mqh_flashover_time,
     thomas_flashover_hrr,
@@ -79,33 +83,69 @@ class ScenarioResult:
     # Life safety (Step 4)
     aset: int | None  # s
     aset_reason: str | None
-    rset: float  # s
-    safety_margin: float | None  # s, ASET - RSET (None if ASET not reached)
+    rset: float | None  # s (None if a heat detector alarm never sounds)
+    safety_margin: float | None  # s, ASET - RSET (None if either is not reached)
+
+    # Fire protection (optional)
+    peak_hrr_used: float = 0.0  # kW, the fuel's peak, or less if a sprinkler capped the fire
+    sprinkler_time: float | None = None  # s, when the sprinkler activates
+    sprinkler_hrr: float | None = None  # kW, fire size held from activation onward
+    sprinkler_temps: list | None = None  # °C, sprinkler element temperature each second
+    heat_detector_time: float | None = None  # s, when the heat detector activates
+    heat_detector_temps: list | None = None  # °C, detector temperature each second
+    alarm_time: float | None = None  # s, detection time used for RSET
 
 
-def run_scenario(alpha, peak_hrr, room, lining, occupant, t_end=600):
+def run_scenario(alpha, peak_hrr, room, lining, occupant, t_end=600,
+                 sprinkler=None, heat_detector=None):
     """Run the whole model.
 
-    alpha     fire growth coefficient (kW/s^2)
-    peak_hrr  peak heat release rate of the fuel (kW)
-    room      fire_model.room.Room
-    lining    fire_model.layer_temp.Lining
-    occupant  fire_model.egress.Occupant
-    t_end     simulated time (s)
+    alpha          fire growth coefficient (kW/s^2)
+    peak_hrr       peak heat release rate of the fuel (kW)
+    room           fire_model.room.Room
+    lining         fire_model.layer_temp.Lining
+    occupant       fire_model.egress.Occupant
+    t_end          simulated time (s)
+    sprinkler      optional fire_model.detection.Device. When it activates, the
+                   fire is held at its size at that moment (it stops growing).
+    heat_detector  optional fire_model.detection.Device. If given, the alarm
+                   sounds when it activates: this replaces the occupant's
+                   detection time.
     """
     t_end = int(t_end)
+    ceiling = room.height  # the fire is at floor level, so H = room height
+
+    # --- Sprinkler: find when it activates in the uncapped fire ---
+    sprinkler_time = sprinkler_hrr = sprinkler_temps = None
+    peak_used = peak_hrr
+    if sprinkler is not None:
+        # "lambda t: ..." makes a small function: give it a time, get the fire size.
+        sprinkler_time, _ = detector_response(
+            lambda t: effective_hrr(t, alpha, peak_hrr, room), ceiling, sprinkler, t_end)
+        if sprinkler_time is not None:
+            # From activation on, the fire stays the size it was. Because the fire
+            # only ever grows, that is the same as lowering its peak to this size.
+            sprinkler_hrr = effective_hrr(sprinkler_time, alpha, peak_hrr, room)
+            peak_used = min(peak_hrr, sprinkler_hrr)
+
+    def fire(t):
+        """The fire actually burning: Q_eff(t), with the sprinkler cap if any."""
+        return effective_hrr(t, alpha, peak_used, room)
+
+    if sprinkler is not None:
+        _, sprinkler_temps = detector_response(fire, ceiling, sprinkler, t_end)
 
     # --- Steps 1-4 as time series ---
-    hrr = hrr_history(alpha, peak_hrr, room, t_end)  # Q_eff(t)
+    hrr = hrr_history(alpha, peak_used, room, t_end)  # Q_eff(t)
     temps = temperature_history(hrr, room, lining)  # MQH, using Q_eff(t)
-    heights = smoke_layer_heights(alpha, peak_hrr, room, lining, t_end)
+    heights = smoke_layer_heights(alpha, peak_used, room, lining, t_end)
 
     # --- Fire size readouts ---
     q_vent = ventilation_limit(room)
-    vent_limited = peak_hrr > q_vent
+    vent_limited = peak_used > q_vent
     time_vent_limited = time_to_reach(q_vent, alpha) if vent_limited else None
     # The fire stops growing at whichever cap it meets first.
-    time_to_peak = time_to_reach(min(peak_hrr, q_vent), alpha)
+    time_to_peak = time_to_reach(min(peak_used, q_vent), alpha)
 
     # Energy released = area under the HRR curve. The trapezoid rule on
     # 1-second intervals: sum of (Q[t-1] + Q[t]) / 2 * 1 s, in kJ -> MJ.
@@ -129,9 +169,19 @@ def run_scenario(alpha, peak_hrr, room, lining, occupant, t_end=600):
     reached = [m.time for m in flashover if m.time is not None]
     flashover_range = (min(reached), max(reached)) if reached else None
 
+    # --- Heat detector: its activation sets the alarm time ---
+    heat_detector_time = heat_detector_temps = None
+    alarm_time = occupant.detection_time
+    if heat_detector is not None:
+        heat_detector_time, heat_detector_temps = detector_response(fire, ceiling, heat_detector, t_end)
+        alarm_time = heat_detector_time  # None: the alarm never sounds in t_end
+
     # --- Step 4: life safety ---
     aset_time, aset_reason = aset(heights, temps)
-    rset_time = rset(occupant)
+    if alarm_time is None:
+        rset_time = None
+    else:
+        rset_time = rset(replace(occupant, detection_time=alarm_time))
 
     return ScenarioResult(
         t_end=t_end,
@@ -157,4 +207,11 @@ def run_scenario(alpha, peak_hrr, room, lining, occupant, t_end=600):
         aset_reason=aset_reason,
         rset=rset_time,
         safety_margin=safety_margin(aset_time, rset_time),
+        peak_hrr_used=peak_used,
+        sprinkler_time=sprinkler_time,
+        sprinkler_hrr=sprinkler_hrr,
+        sprinkler_temps=sprinkler_temps,
+        heat_detector_time=heat_detector_time,
+        heat_detector_temps=heat_detector_temps,
+        alarm_time=alarm_time,
     )
