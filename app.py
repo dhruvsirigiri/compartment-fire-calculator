@@ -19,23 +19,65 @@ This is a learning tool, not a design tool.
 """
 
 import math
+import sys
 from dataclasses import replace
+from pathlib import Path
 
 import streamlit as st
 
-import charts
-from charts import PALETTES, round_half_up, seconds
-from explanations import show_explanations
-from fire_model.detection import HEAT_DETECTOR_RTI, SPRINKLER_RATING_F, SPRINKLER_RTI, Device, fahrenheit_to_celsius
-from fire_model.egress import OCCUPANT_PRESETS, Occupant
-from fire_model.growth import FUEL_PEAK_HRR, GROWTH_TIMES, REFERENCE_HRR, burning_diameter, growth_coefficient
-from fire_model.layer_temp import LININGS
-from fire_model.room import Room, room_problems
-from fire_model.scenario import run_scenario
-from fire_model.smoke_filling import flame_height
-from room_view import room_3d_figure
-from units import SYSTEMS, Units
-from worked_example import build_worked_example
+# -----------------------------------------------------------------------------
+# Load the current version of this project's own code.
+#
+# Streamlit Community Cloud keeps the app's Python process running when new code
+# is pushed to GitHub, and Python loads each module only once. So after an
+# update, modules imported earlier (fire_model/..., charts.py, ...) can stay at
+# their OLD version in memory while app.py itself is re-read, and the mix breaks
+# (for example an ImportError for a function that only the new version has).
+# Whenever any of the project's .py files has changed since the code was loaded,
+# forget the project's modules so that the imports below load them fresh.
+# -----------------------------------------------------------------------------
+PROJECT_FOLDERS = (Path(__file__).resolve().parent, Path(__file__).resolve().parent / "fire_model")
+
+
+def code_fingerprint():
+    """When each of the project's Python files was last changed."""
+    return tuple((str(f), f.stat().st_mtime) for folder in PROJECT_FOLDERS for f in sorted(folder.glob("*.py")))
+
+
+@st.cache_resource
+def loaded_code():
+    """Which version of the code this running server has loaded (shared by all visitors)."""
+    return {"fingerprint": None}
+
+
+def load_current_code():
+    loaded = loaded_code()
+    current = code_fingerprint()
+    if loaded["fingerprint"] != current:
+        for name, module in list(sys.modules.items()):
+            path = getattr(module, "__file__", None)
+            # Only this project's own modules; never Streamlit, Plotly or Python's.
+            if name != "__main__" and path and Path(path).resolve().parent in PROJECT_FOLDERS:
+                del sys.modules[name]
+        loaded["fingerprint"] = current
+
+
+load_current_code()
+
+# The project's own modules are imported only now, after the check above.
+import charts  # noqa: E402
+from charts import PALETTES, round_half_up, seconds  # noqa: E402
+from explanations import show_explanations  # noqa: E402
+from fire_model.detection import HEAT_DETECTOR_RTI, SPRINKLER_RATING_F, SPRINKLER_RTI, Device, fahrenheit_to_celsius  # noqa: E402
+from fire_model.egress import OCCUPANT_PRESETS, Occupant  # noqa: E402
+from fire_model.growth import FUEL_PEAK_HRR, GROWTH_TIMES, REFERENCE_HRR, burning_diameter, growth_coefficient  # noqa: E402
+from fire_model.layer_temp import LININGS  # noqa: E402
+from fire_model.room import Room, room_problems  # noqa: E402
+from fire_model.scenario import run_scenario  # noqa: E402
+from fire_model.smoke_filling import flame_height  # noqa: E402
+from room_view import room_3d_figure  # noqa: E402
+from units import SYSTEMS, Units  # noqa: E402
+from worked_example import build_worked_example  # noqa: E402
 
 st.set_page_config(page_title="Compartment Fire Calculator", page_icon="🔥", layout="wide")
 
