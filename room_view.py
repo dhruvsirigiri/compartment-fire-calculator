@@ -36,7 +36,7 @@ from charts import rgba
 from fire_model.egress import HEAD_HEIGHT, distance_left_to_walk, occupant_status
 from fire_model.growth import burning_diameter
 from fire_model.layer_temp import T_AMBIENT, is_within_mqh_range
-from fire_model.smoke_filling import door_outflow, flame_height, kelvin
+from fire_model.smoke_filling import flame_height
 
 MAX_FRAMES = 121  # about one frame every 5 s for a 600 s simulation
 SEGMENTS = 14  # sides used to draw round shapes (flames, plume)
@@ -61,6 +61,11 @@ GENERIC_FURNITURE = ([(-0.5, 0.5, -0.5, 0.5, 0.0, 0.45)], 0.45)
 # ---------------------------------------------------------------------------
 # Shapes (corner points and triangles for go.Mesh3d)
 # ---------------------------------------------------------------------------
+
+def burning_surface_height(fuel):
+    """Height (m) of the surface the flames are drawn from, for a fuel preset."""
+    return FURNITURE.get(fuel, GENERIC_FURNITURE)[1]
+
 
 def _box(x0, x1, y0, y1, z0, z1):
     """A rectangular box. Each of the 6 faces is 2 triangles; i, j, k list their corners."""
@@ -150,7 +155,7 @@ def room_3d_figure(result, room, occupant, colors, units, start_time=120, fire_d
     fire_x, fire_y = 0.28 * L, 0.3 * W
 
     # Furniture, shrunk if the room is small, and the height its top burns at.
-    boxes, surface = FURNITURE.get(fuel, GENERIC_FURNITURE)
+    boxes, surface = FURNITURE.get(fuel, GENERIC_FURNITURE)  # surface = burning_surface_height(fuel)
     shrink = min(1.0, 0.45 * L / max(b[1] - b[0] for b in boxes), 0.45 * W / max(b[3] - b[2] for b in boxes))
     furniture = [(fire_x + shrink * b[0], fire_x + shrink * b[1], fire_y + shrink * b[2], fire_y + shrink * b[3],
                   b[4], b[5]) for b in boxes]
@@ -322,7 +327,8 @@ def room_3d_figure(result, room, occupant, colors, units, start_time=120, fire_d
     FIXED_POSITION = {"Sprinkler water", "Sprinkler", "Heat detector"}
 
     def as_trace(part, full):
-        """A trace for the figure (full) or for an animation frame (only what moves)."""
+        """A trace for the figure (full) or for an animation frame (only what moves).
+        Frame traces stay plain dicts: Plotly checks them once, when they are added."""
         part = dict(part)
         kind = part.pop("type", "mesh3d")
         if not full:  # frames only send what moves; Plotly keeps the rest from the first view
@@ -331,11 +337,11 @@ def room_3d_figure(result, room, occupant, colors, units, start_time=120, fire_d
             if part["name"] in FIXED_POSITION:  # these only appear or change color
                 for axis in ("x", "y", "z"):
                     part.pop(axis, None)
-        else:
-            part.setdefault("showlegend", part["name"] in legend_names)
+            return dict(type=kind, **part)
+        part.setdefault("showlegend", part["name"] in legend_names)
         if kind == "scatter3d":
             return go.Scatter3d(hoverinfo="skip", **part)
-        return go.Mesh3d(flatshading=True, hoverinfo="skip", **part) if full else go.Mesh3d(**part)
+        return go.Mesh3d(flatshading=True, hoverinfo="skip", **part)
 
     # Static parts: floor, hallway, cutaway walls, door frame, edges, head height, furniture.
     door_wall = _boxes([
@@ -379,8 +385,8 @@ def room_3d_figure(result, room, occupant, colors, units, start_time=120, fire_d
     frames = []
     for t in frame_times:
         f_parts, f_caption, f_labels = state(t)
-        frames.append(go.Frame(name=str(t), data=[as_trace(p, full=False) for p in f_parts], traces=moving_indices,
-                               layout=dict(title=dict(text=f_caption), scene=dict(annotations=f_labels))))
+        frames.append(dict(name=str(t), data=[as_trace(p, full=False) for p in f_parts], traces=moving_indices,
+                           layout=dict(title=dict(text=f_caption), scene=dict(annotations=f_labels))))
     fig.frames = frames
 
     span_x, span_y, span_z = (L + 1.3) * s, (W + 0.4) * s, (H + 0.1) * s
@@ -401,7 +407,7 @@ def room_3d_figure(result, room, occupant, colors, units, start_time=120, fire_d
             zaxis=dict(title=f"Height ({unit})", range=[-0.02 * s, (H + 0.1) * s], **hidden_axis),
             aspectmode="manual",
             aspectratio=dict(x=span_x / biggest, y=span_y / biggest, z=span_z / biggest),
-            camera=dict(eye=dict(x=0.95, y=-1.3, z=0.7)),
+            camera=dict(eye=dict(x=0.8, y=-1.1, z=0.6)),  # front right, slightly above
             annotations=labels,
         ),
         updatemenus=[dict(
